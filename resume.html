@@ -6,32 +6,94 @@
     </head>
     <body>
         <nav class="navbar">
-            <h1 class="logo">Tuan Hoang</h1>
+            <h1 class="logo"><a href="index.html">Tuan Hoang</a></h1>
         </nav>
 
         <main>
             <h1 class="page-title">My Resume</h1>
-            <p>Welcome to my resume!</p>
+            <p>(916) 586-0038 | <a href="mailto:tuanhoang0117@gmail.com">tuanhoang0117@gmail.com</a> | LinkedIn | GitHub</p>
 
             <div class="resume">
                 <section class="section">
                     <h2 class="section-title">Education</h2>
-                    <p>Placeholder: school, degree, and expected graduation date.</p>
+
+                    <h3>California Polytechnic State University, San Luis Obispo</h3>
+                    <p>San Luis Obispo, CA</p>
+                    <p><em>Bachelor of Science in Computer Science</em> — Expected May 2028</p>
+
+                    <h3>Folsom Lake College</h3>
+                    <p>Folsom, CA</p>
+                    <p><em>A.S. Computer Science | A.A. Interdisciplinary Studies: Math and Science | GPA: 3.7/4.0</em> — May 2026</p>
+                    <p>Coursework: Object Oriented Programming (C++), Discrete Structures, Data Structures, Algorithm Design/Problem Solving, Multivariable Calculus, Linear Algebra, Differential Equations</p>
                 </section>
 
                 <section class="section">
                     <h2 class="section-title">Skills</h2>
-                    <p>Placeholder: list of technical and other skills.</p>
+                    <ul>
+                        <li><strong>Languages:</strong> Python, TypeScript, JavaScript, C++</li>
+                        <li><strong>Backend &amp; Data:</strong> Node.js, Express.js, FastAPI, Redis, MongoDB, Firebase (Cloud Firestore), REST API design</li>
+                        <li><strong>AI / ML:</strong> retrieval-augmented generation (RAG), Google Gemini, OpenCV, NumPy</li>
+                        <li><strong>Frontend:</strong> React Native, Next.js, Tailwind CSS, Three.js</li>
+                        <li><strong>Tools:</strong> Git, Postman, Xcode, Android Studio</li>
+                    </ul>
                 </section>
 
                 <section class="section">
                     <h2 class="section-title">Experience</h2>
-                    <p>Placeholder: work history and job responsibilities.</p>
+
+                    <h3>Develop for Good | Software Engineer</h3>
+                    <p>Remote</p>
+                    <p><em>Web Team – TAR Syndrome Association (nonprofit client)</em> — May 2026 – Aug. 2026</p>
+                    <ul>
+                        <li>Raised the client site's Google Lighthouse score from 72 to 87 by remediating WCAG accessibility failures: corrected text/background contrast ratios, restored semantic H1–H3 heading hierarchy, and replaced ambiguous link elements with accessible button controls.</li>
+                        <li>Built and shipped 2 responsive pages for a rare-disease patient advocacy org, structuring navigation and link components so non-technical staff could update content post-handoff without developer support.</li>
+                        <li>Integrated Mailchimp for community lead capture and configured the org's online donation flow; authored the PRD, client handoff guide, and Demo Day technical presentation that transferred ownership to the client.</li>
+                    </ul>
+
+                    <h3>UCSD Summer Internship Prep Program</h3>
+                    <p>La Jolla, CA</p>
+                    <ul>
+                        <li>Built a real-time computer vision system (Python, OpenCV) that measures how full a space is by splitting the camera view into a 36-cell grid and reading occupancy live at 30+ FPS, giving an at-a-glance capacity check.</li>
+                    </ul>
                 </section>
 
                 <section class="section">
                     <h2 class="section-title">Projects</h2>
-                    <p>Placeholder: personal or school projects.</p>
+
+                    <h3>ZIP | SacHacks (Next.js, React, Mapbox GL, Turf.js)</h3>
+                    <p>Sacramento, CA</p>
+                    <ul>
+                        <li>Built an MVP decision-support platform that ranks U.S. ZIP codes for housing investment opportunity, rendering national results in an interactive Mapbox GL map with choropleth, heatmap, and 3D building views.</li>
+                        <li>Designed a weighted composite scoring model over demographic growth and income data, built on a CSV ingestion pipeline that stitches mismatched multi-source inputs by ZIP/ZCTA so rankings stay explainable instead of a black box.</li>
+                        <li>Built a drilldown analytics view with score-context charts (SWR, Recharts) and a U.S. Census TIGERweb boundary fallback, so ZIP polygon geometry still renders correctly when source data is incomplete.</li>
+                    </ul>
+
+                    <h3>Oculus MD | QuackHacks 3 (OpenCV, Google Gemini, FastAPI, MongoDB)</h3>
+                    <p>Eugene, OR</p>
+                    <ul>
+                        <li>Built the FastAPI backend for a medication-safety app, implementing 4 MongoDB-backed validation checks (drug interactions, contraindications, dose ceilings, re-dose timing) that reject unsafe combinations such as Warfarin + Metronidazole before dispensing.</li>
+                        <li>Enforced a server-side guardrail layer that constrains the model to cross-reference the prescribing instructions and drug database rather than generating independent medical judgments.</li>
+                    </ul>
+
+                    <h3>Weather Proxy API | Personal Project (Node.js, Express, Redis)</h3>
+                    <p>GitHub</p>
+                    <ul>
+                        <li>Built a REST service that proxies a third-party weather API behind a Redis cache-aside layer with configurable TTL, cutting repeat-city requests to a single upstream call and keeping the service responsive when the provider is slow.</li>
+                        <li>Hardened the API with per-IP rate limiting, a dependency-independent health endpoint, and a uniform error contract mapping upstream and client failures to distinct 400/404/429/502 responses instead of generic 500s.</li>
+                    </ul>
+
+                    <h3>Sprout Food Diet App | Personal Project (React Native, Python/FastAPI)</h3>
+                    <p>Sacramento, CA</p>
+                    <ul>
+                        <li>Designed the retrieval backend for a RAG chatbot: an ingestion pipeline that chunks nutrition sources into a vector store with deduplication, so every response traces to a citable document.</li>
+                        <li>Served retrieval and generation through a Python/FastAPI API consumed by a cross-platform React Native client, returning grounded answers in under 200 ms.</li>
+                    </ul>
+
+                    <h3>VibeMate | Winner – Hack with MLH and DigitalOcean (Three.js, Web Audio API)</h3>
+                    <p>San Francisco, CA</p>
+                    <ul>
+                        <li>Structured a real-time emotion-driven web app into modular scene, audio, and UI managers with async initialization and graceful fallbacks, keeping the live demo stable under load.</li>
+                    </ul>
                 </section>
             </div>
         </main>
