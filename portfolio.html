@@ -12,6 +12,129 @@
         <main>
             <h1 class="page-title">My Portfolio</h1>
             <p>Welcome to my portfolio!</p>
+
+            <div class="project">
+                <article class="project-item">
+                    <h3>Force Sensor with LED Output</h3>
+                    <p>A CircuitPython project developed on an Adafruit Metro board to measure grip strength using a force sensor. LEDs light up based on force thresholds, and results are compared against prior sessions. A two-test comparison stores the stronger grip result in memory, lighting all LEDs when the second test beats the first.</p>
+                    <ul>
+                        <li>CircuitPython</li>
+                        <li>Adafruit Metro M4 board</li>
+                        <li>LEDs & force sensor</li>
+                    </ul>
+                    <img src="https://raw.githubusercontent.com/tuanhoang0117/force-sensor-LEDs/main/force-sensor-leds/assets/forcesensor.jpg" alt="Force sensor with LED apparatus">
+                    <p><a href="https://github.com/tuanhoang0117/force-sensor-LEDs">View on GitHub</a></p>
+                </article>
+
+                <article class="project-item">
+                    <h3>Grid Occupancy Detection with OpenCV</h3>
+                    <p>A computer vision project that detects and counts occupied zones in a 6x6 grid using a live webcam feed. Each cell is analyzed with grayscale conversion, Gaussian blur, and adaptive thresholding to estimate occupancy in real time, useful for crowd monitoring or object counting applications.</p>
+                    <ul>
+                        <li>Python</li>
+                        <li>OpenCV (cv2)</li>
+                        <li>NumPy</li>
+                    </ul>
+                    <img src="https://raw.githubusercontent.com/tuanhoang0117/OpenCV-Crowd-Density/main/OpenCV-Crowd-Density/assets/apparatus.jpg" alt="Webcam and hardware setup for grid occupancy detection">
+                    <img src="https://raw.githubusercontent.com/tuanhoang0117/OpenCV-Crowd-Density/main/OpenCV-Crowd-Density/assets/grid.png" alt="6x6 grid visualization showing occupied and empty cells">
+                    <p><a href="https://github.com/tuanhoang0117/OpenCV-Crowd-Density">View on GitHub</a></p>
+                </article>
+
+                <article class="project-item">
+                    <h3>Phonebook Application</h3>
+                    <p>A C++ console-based phonebook manager that stores, displays, updates, and removes contacts using a map keyed by name. Supports loading contacts from a text file, applying bulk updates from a file, and automatically formatting phone numbers as XXX-XXX-XXXX.</p>
+                    <ul>
+                        <li>C++</li>
+                        <li>File-based persistent storage</li>
+                    </ul>
+                    <p><a href="https://github.com/tuanhoang0117/Phonebook-Application">View on GitHub</a></p>
+                </article>
+
+                <article class="project-item">
+                    <h3>Remind App</h3>
+                    <p>A cross-platform reminder and task app built with Flutter, focused on clean UI, fast task entry, and reliable persistence. Tasks sync to the cloud via Firebase Cloud Firestore and are also cached locally with SharedPreferences for quick access.</p>
+                    <ul>
+                        <li>Flutter / Dart</li>
+                        <li>Firebase Cloud Firestore</li>
+                        <li>SharedPreferences</li>
+                    </ul>
+                    <p><a href="https://github.com/tuanhoang0117/remindapp">View on GitHub</a></p>
+                </article>
+
+                <article class="project-item">
+                    <h3>WeatherAPI</h3>
+                    <p>A backend API that acts as a proxy and cache in front of the Visual Crossing weather API. A client asks for the weather in a city; the server checks a Redis cache first (cache-aside pattern with configurable TTL) and only calls Visual Crossing when there's no fresh answer cached. Hardened with per-IP rate limiting and structured 400/404/429/502 error responses.</p>
+                    <ul>
+                        <li>Node.js / Express</li>
+                        <li>Redis (ioredis)</li>
+                        <li>express-rate-limit</li>
+                    </ul>
+                    <p><a href="https://github.com/tuanhoang0117/WeatherAPI">View on GitHub</a></p>
+                </article>
+
+                <article class="project-item">
+                    <h3>Blogging Platform API</h3>
+                    <p>A REST API for a personal blogging platform with full CRUD on blog posts plus a case-insensitive keyword search across title, content, and category. Validates request bodies and returns clear, consistently-shaped error responses instead of crashing; data persists in PostgreSQL via Prisma.</p>
+                    <ul>
+                        <li>Node.js / Express 5</li>
+                        <li>PostgreSQL / Prisma</li>
+                        <li>express-validator</li>
+                    </ul>
+                    <p><a href="https://github.com/tuanhoang0117/BloggingPlatformAPI">View on GitHub</a></p>
+                </article>
+            </div>
+
+            <h2>Hackathons</h2>
+
+            <div class="hackathon">
+                <article class="hackathon-item">
+                    <h3>ACE</h3>
+                    <p><em>HackHayward 2026</em></p>
+                    <p>An AI assistant coach that uses computer vision to seamlessly track volleyball player stats. Combines a fast manual stat-tracking web app for coaches with custom-trained AI models that detect the ball, track players, classify game actions, and recognize jersey numbers from video.</p>
+                    <p>
+                        <a href="https://github.com/tuanhoang0117/HaywardHacks2026">View on GitHub</a> |
+                        <a href="https://devpost.com/software/ace-ni7lry">View on Devpost</a>
+                    </p>
+                </article>
+
+                <article class="hackathon-item">
+                    <h3>oculusMD</h3>
+                    <p><em>QuackHacks 2026</em></p>
+                    <p>An AI-powered medication safety copilot that scans a patient's pill tray, cross-references every drug against a medical database for interactions, contraindications, and dose timing, and speaks the verdict aloud, blocking the dose and explaining why if anything is unsafe.</p>
+                    <p>
+                        <a href="https://github.com/tuanhoang0117/QuackHacks-3-2026">View on GitHub</a> |
+                        <a href="https://2026.quackhacks.org/projects/oculusmd">View on QuackHacks</a>
+                    </p>
+                </article>
+
+                <article class="hackathon-item">
+                    <h3>Student Athlete Wellness AI</h3>
+                    <p><em>HornetHacks Fall 2025</em></p>
+                    <p>A web application that helps student athletes track and optimize wellness through sleep monitoring, diet tracking, and exercise progress visualization, with a dashboard of AI-ready recommendations and weekly summaries.</p>
+                    <p>
+                        <a href="https://github.com/PancakeNinja64/HornetHacks_FALL2025">View on GitHub</a>
+                    </p>
+                </article>
+
+                <article class="hackathon-item">
+                    <h3>ZIP</h3>
+                    <p><em>SacHacks VII</em></p>
+                    <p>An MVP decision-support platform that turns raw ZIP-code demographic forecasts into a map-first investment radar, ranking U.S. ZIP codes for single-family housing investment opportunity with an interactive choropleth/heatmap map and drilldown analytics.</p>
+                    <p>
+                        <a href="https://github.com/PancakeNinja64/SacHacks">View on GitHub</a> |
+                        <a href="https://devpost.com/software/zip-w694qr">View on Devpost</a>
+                    </p>
+                </article>
+
+                <article class="hackathon-item">
+                    <h3>VibeMate</h3>
+                    <p><em>Hack with MLH and DigitalOcean: SF — Winner, Best Beginner Project</em></p>
+                    <p>A multi-personality AI agent that acts as a mood-responsive DJ, an empathetic counselor that reads emotional state from facial expressions, and a personalized tutor, sharing context across all three modes for seamless transitions.</p>
+                    <p>
+                        <a href="https://github.com/RocketRaccons/VibeMate3">View on GitHub</a> |
+                        <a href="https://devpost.com/software/vibemate-4xjhrb">View on Devpost</a>
+                    </p>
+                </article>
+            </div>
         </main>
 
         <footer class="footer">© 2026 Tuan Hoang Website | All Rights Reserved</footer>
