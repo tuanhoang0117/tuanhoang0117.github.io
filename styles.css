@@ -171,11 +171,28 @@ body {
 }
 
 main {
-  padding: 0 20px 40px 20px;
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: var(--spacing-40) var(--spacing-24) var(--spacing-60);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  align-items: stretch;
+  gap: var(--spacing-24);
+  box-sizing: border-box;
+}
+
+/* Loose text/buttons sitting directly in main (not inside a card) should
+   stay compact and centered instead of stretching full page width */
+main > p,
+main > .button {
+  align-self: center;
+}
+
+main > p {
+  text-align: center;
+  max-width: 600px;
+  margin: 0;
 }
 
 .page-title {
@@ -287,25 +304,75 @@ main {
 
 /* CSS for home page */
 
+.hero {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--spacing-40);
+  margin-bottom: var(--section-gap);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono-label);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-fog);
+  margin: 0 0 var(--spacing-16) 0;
+}
+
+.hero-title {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-regular);
+  font-size: clamp(40px, 7vw, var(--text-display-sm));
+  line-height: var(--leading-display-sm);
+  color: var(--color-cloud);
+  margin: 0 0 var(--spacing-24) 0;
+}
+
+.hero-title em {
+  font-style: italic;
+}
+
+.hero-subhead {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-light);
+  font-size: var(--text-subheading);
+  line-height: var(--leading-subheading);
+  color: var(--color-ash);
+  max-width: 560px;
+  margin: 0;
+}
+
 .about {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-32);
   width: 100%;
   padding: var(--card-padding);
   background-color: var(--color-graphite);
   border-radius: var(--radius-cards);
 }
 
-.about-image img {
-  max-width: 300px;
-  border-radius: 3px;
-  /* box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); */
+.about-image {
+  flex-shrink: 0;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background-image: linear-gradient(135deg, rgb(43, 43, 44), rgb(19, 19, 19));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.about-image span {
+  font-family: var(--font-display);
+  font-size: 40px;
+  color: var(--color-cloud);
 }
 
 .about-text {
   flex: 1;
-  margin-left: 20px;
 }
 
 .about-text h2 {
@@ -329,6 +396,7 @@ main {
   gap: var(--spacing-24);
   width: 100%;
   max-width: 800px;
+  margin: 0 auto;
 }
 
 .section {
