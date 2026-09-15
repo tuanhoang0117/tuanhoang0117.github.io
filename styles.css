@@ -86,13 +86,6 @@
   --surface-graphite-card: #2e2e2e;
   --surface-steel-hover: #3f4041;
   --surface-silver-inverted: #cacaca;
-
-  /* Legacy tokens — still referenced by not-yet-migrated rules below.
-     Will be retired as each section is ported to the new system. */
-  --cg-black: rgb(30, 32, 32);
-  --cg-blue: rgb(36, 94, 255);
-  --cg-grey: rgb(243, 243, 243);
-  --cg-white: rgb(255, 255, 255);
 }
 
 html {
@@ -331,20 +324,30 @@ main {
 }
 
 .button {
-  background-color: var(--cg-black);
+  display: inline-block;
+  background-color: var(--color-pure);
   border: none;
-  color: var(--cg-white);
+  color: var(--color-void);
 
-  font-family: monospace;
-
-  padding: 5px 7px;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--text-body);
+  text-decoration: none;
   text-align: center;
 
-  border-radius: 2px;
+  padding: var(--spacing-12) 18px;
+  border-radius: var(--radius-buttons);
+
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.button::after {
+  content: " \2192";
 }
 
 .button:hover {
-  background-color: var(--cg-blue);
+  background-color: var(--color-cloud);
 }
 
 .resume h2 {
@@ -377,20 +380,56 @@ main {
 label {
   display: block;
   margin-bottom: 8px;
-  font-family: Georgia;
-  font-weight: bold;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-cloud);
 }
 
 input[type="text"],
 input[type="email"],
 textarea {
   width: 100%;
-  padding: 10px;
+  padding: var(--spacing-12) var(--spacing-16);
   margin-bottom: 15px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 16px;
+  background-color: var(--color-graphite);
+  color: var(--color-cloud);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-inputs);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
   resize: none;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+textarea::placeholder {
+  color: var(--color-fog);
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-pure);
+}
+
+input[type="submit"] {
+  display: inline-block;
+  background-color: var(--color-pure);
+  color: var(--color-void);
+  border: none;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--text-body);
+  padding: var(--spacing-12) 18px;
+  border-radius: var(--radius-buttons);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+input[type="submit"]:hover {
+  background-color: var(--color-cloud);
 }
 
 /* Add some spacing to the form */
