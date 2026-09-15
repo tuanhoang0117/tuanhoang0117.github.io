@@ -249,6 +249,13 @@ main > p {
   padding: var(--card-padding);
   text-align: left;
   line-height: 1.5;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.project-item:hover,
+.hackathon-item:hover {
+  background-color: var(--color-steel);
+  transform: translateY(-4px);
 }
 
 .project-item h3,
@@ -334,6 +341,31 @@ main > p {
   margin-bottom: var(--section-gap);
 }
 
+/* Motion — long atmospheric reveal on load, per design.md's motion philosophy */
+@keyframes heroReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero > * {
+  opacity: 0;
+  animation: heroReveal 1s cubic-bezier(0.455, 0.03, 0.515, 0.955) forwards;
+}
+
+.hero > *:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.hero > *:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
 .eyebrow {
   font-family: var(--font-mono);
   font-size: var(--text-mono-label);
@@ -377,21 +409,50 @@ main > p {
   border-radius: var(--radius-cards);
 }
 
+/* Motion — border trace: a slow rotating highlight around the circular
+   avatar frame, per design.md's named "borderTurn" pattern for feature
+   highlights. Uses a neutral white sheen, not a chromatic color, since
+   the system reserves chromatic accents for full-bleed tiles only. */
+@keyframes borderTurn {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .about-image {
+  position: relative;
   flex-shrink: 0;
   width: 140px;
   height: 140px;
   border-radius: 50%;
-  background-image: linear-gradient(135deg, rgb(43, 43, 44), rgb(19, 19, 19));
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 4px;
 }
 
-.about-image span {
-  font-family: var(--font-display);
-  font-size: 40px;
-  color: var(--color-cloud);
+.about-image::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgba(255, 255, 255, 0.7), transparent 50%, rgba(255, 255, 255, 0.7));
+  animation: borderTurn 8s linear infinite;
+}
+
+.about-image img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.about-image:hover img {
+  transform: scale(1.05);
 }
 
 .about-text {
@@ -444,7 +505,7 @@ main > p {
   border-radius: var(--radius-buttons);
 
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .button::after {
@@ -453,6 +514,7 @@ main > p {
 
 .button:hover {
   background-color: var(--color-cloud);
+  transform: translateY(-2px);
 }
 
 .resume h2 {
@@ -556,11 +618,12 @@ input[type="submit"] {
   padding: var(--spacing-12) 18px;
   border-radius: var(--radius-buttons);
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 input[type="submit"]:hover {
   background-color: var(--color-cloud);
+  transform: translateY(-2px);
 }
 
 /* Add some spacing to the form */
