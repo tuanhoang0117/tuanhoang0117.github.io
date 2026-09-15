@@ -103,6 +103,15 @@ body {
   font-weight: var(--font-weight-regular);
 }
 
+a {
+  color: var(--color-pure);
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-cloud);
+}
+
 /* CSS for navigation */
 
 .navbar {
@@ -307,6 +316,8 @@ main > p {
 .hero {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-16);
   padding-top: var(--spacing-40);
   margin-bottom: var(--section-gap);
 }
@@ -317,7 +328,7 @@ main > p {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--color-fog);
-  margin: 0 0 var(--spacing-16) 0;
+  margin: 0;
 }
 
 .hero-title {
@@ -326,7 +337,7 @@ main > p {
   font-size: clamp(40px, 7vw, var(--text-display-sm));
   line-height: var(--leading-display-sm);
   color: var(--color-cloud);
-  margin: 0 0 var(--spacing-24) 0;
+  margin: 0;
 }
 
 .hero-title em {
