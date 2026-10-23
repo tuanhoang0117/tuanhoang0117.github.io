@@ -1,0 +1,68 @@
+import type { ReactNode } from "react";
+import { PageHeader } from "../components/ui/PageHeader";
+import { resume } from "../content/resume";
+import type { ResumeEntry } from "../content/types";
+
+function Entry({ entry }: { entry: ResumeEntry }) {
+  return (
+    <article className="border-l-4 border-poly pl-4">
+      <h3 className="text-lg font-bold">{entry.title}</h3>
+      {entry.location && <p className="label-mono text-ink-muted">{entry.location}</p>}
+      {entry.detail && <p className="mt-1 italic">{entry.detail}</p>}
+      {entry.bullets.length > 0 && (
+        <ul className="mt-2 list-disc space-y-1 pl-5 marker:text-poly">
+          {entry.bullets.map((b) => (
+            <li key={b}>{b}</li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
+  const id = title.toLowerCase();
+  return (
+    <section aria-labelledby={id} className="border-t-2 border-ink py-8">
+      <h2 id={id} className="label-mono mb-6 text-poly">
+        {n} — {title}
+      </h2>
+      <div className="space-y-6">{children}</div>
+    </section>
+  );
+}
+
+export function Resume() {
+  return (
+    <>
+      <PageHeader title="Resume" prompt="Education, experience, and projects." />
+      <div className="mx-auto max-w-3xl px-4 pb-20 sm:px-8">
+        <Section n="01" title="Education">
+          {resume.education.map((e) => (
+            <Entry key={e.title} entry={e} />
+          ))}
+        </Section>
+        <Section n="02" title="Skills">
+          <dl className="space-y-3">
+            {resume.skills.map((g) => (
+              <div key={g.label}>
+                <dt className="font-bold">{g.label}</dt>
+                <dd>{g.skills.join(", ")}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+        <Section n="03" title="Experience">
+          {resume.experience.map((e) => (
+            <Entry key={e.title} entry={e} />
+          ))}
+        </Section>
+        <Section n="04" title="Projects">
+          {resume.projects.map((e) => (
+            <Entry key={e.title} entry={e} />
+          ))}
+        </Section>
+      </div>
+    </>
+  );
+}
