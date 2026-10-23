@@ -70,15 +70,6 @@
                     <p><a href="https://github.com/tuanhoang0117/OpenCV-Crowd-Density">View on GitHub</a></p>
                 </article>
 
-                <article class="project-item">
-                    <h3>Phonebook Application</h3>
-                    <p>A C++ console-based phonebook manager that stores, displays, updates, and removes contacts using a map keyed by name. Supports loading contacts from a text file, applying bulk updates from a file, and automatically formatting phone numbers as XXX-XXX-XXXX.</p>
-                    <ul>
-                        <li>C++</li>
-                        <li>File-based persistent storage</li>
-                    </ul>
-                    <p><a href="https://github.com/tuanhoang0117/Phonebook-Application">View on GitHub</a></p>
-                </article>
 
                 <article class="project-item">
                     <h3>Remind App</h3>
@@ -120,10 +111,10 @@
                 <article class="hackathon-item">
                     <h3>ACE</h3>
                     <p><em>HackHayward 2026</em></p>
-                    <p>An AI assistant coach that uses computer vision to seamlessly track volleyball player stats. Combines a fast manual stat-tracking web app for coaches with custom-trained AI models that detect the ball, track players, classify game actions, and recognize jersey numbers from video.</p>
+                    <p>An assistant coach for volleyball: a manual stat-tracking app for coaches, plus an attempt to track players and read jersey numbers automatically from game video.</p>
+                    <p><strong>My part:</strong> I took on the video side, adapting an open-source, pretrained jersey-number model to volleyball footage. I couldn't get the tracking working before the deadline. A teammate built the app screens.</p>
                     <img src="https://d112y698adiu2z.cloudfront.net/photos/production/software_photos/004/481/870/datas/gallery.jpg" alt="ACE live volleyball tracker showing court view, play-by-play, and team stats">
                     <p>
-                        <a href="https://github.com/tuanhoang0117/HaywardHacks2026">View on GitHub</a> |
                         <a href="https://devpost.com/software/ace-ni7lry">View on Devpost</a>
                     </p>
                 </article>
@@ -131,7 +122,8 @@
                 <article class="hackathon-item">
                     <h3>oculusMD</h3>
                     <p><em>QuackHacks 2026</em></p>
-                    <p>An AI-powered medication safety copilot that scans a patient's pill tray, cross-references every drug against a medical database for interactions, contraindications, and dose timing, and speaks the verdict aloud, blocking the dose and explaining why if anything is unsafe.</p>
+                    <p>A medication safety copilot. Gemini only identifies medications from camera and document images; a rule-based engine makes every safety decision with three checks: drug interactions, contraindications, and too-soon re-doses.</p>
+                    <p><strong>My part:</strong> I built the FastAPI backend: the safety engine, the Gemini perception agent, the API endpoints, and the tests. A teammate built the mobile app.</p>
                     <img src="https://raw.githubusercontent.com/tuanhoang0117/QuackHacks-3-2026/main/screenshot-verified-present-lisinopril.png" alt="oculusMD scan result showing a verified-safe medication">
                     <p>
                         <a href="https://github.com/tuanhoang0117/QuackHacks-3-2026">View on GitHub</a> |
@@ -139,19 +131,12 @@
                     </p>
                 </article>
 
-                <article class="hackathon-item">
-                    <h3>Student Athlete Wellness AI</h3>
-                    <p><em>HornetHacks Fall 2025</em></p>
-                    <p>A web application that helps student athletes track and optimize wellness through sleep monitoring, diet tracking, and exercise progress visualization, with a dashboard of AI-ready recommendations and weekly summaries.</p>
-                    <p>
-                        <a href="https://github.com/PancakeNinja64/HornetHacks_FALL2025">View on GitHub</a>
-                    </p>
-                </article>
 
                 <article class="hackathon-item">
                     <h3>ZIP</h3>
                     <p><em>SacHacks VII</em></p>
-                    <p>An MVP decision-support platform that turns raw ZIP-code demographic forecasts into a map-first investment radar, ranking U.S. ZIP codes for single-family housing investment opportunity with an interactive choropleth/heatmap map and drilldown analytics.</p>
+                    <p>A map-first investment radar that ranks U.S. ZIP codes for single-family housing opportunity, with choropleth and heatmap views and drilldown analytics.</p>
+                    <p><strong>My part:</strong> I built the map and the UI: the Mapbox choropleth and heatmap modes, ZIP search with a boundary fallback, the drilldown views, and two API routes. A teammate built the scoring model and data pipeline.</p>
                     <img src="https://raw.githubusercontent.com/PancakeNinja64/SacHacks/main/screenshot-choropleth.png" alt="ZIP choropleth map showing ZIP-level investment scores">
                     <p>
                         <a href="https://github.com/PancakeNinja64/SacHacks">View on GitHub</a> |
@@ -162,7 +147,8 @@
                 <article class="hackathon-item">
                     <h3>VibeMate <span class="badge">Winner</span></h3>
                     <p><em>Hack with MLH and DigitalOcean: SF — Winner, Best Beginner Project</em></p>
-                    <p>A multi-personality AI agent that acts as a mood-responsive DJ, an empathetic counselor that reads emotional state from facial expressions, and a personalized tutor, sharing context across all three modes for seamless transitions.</p>
+                    <p>One AI agent with three modes that share context: a DJ that matches music to your mood, a counselor that reads emotion from facial expressions, and a study buddy, with 3D visuals that react to both.</p>
+                    <p><strong>My part:</strong> A team win I contributed to: I helped shape the idea, set up the APIs and DigitalOcean, and tested the prototypes.</p>
                     <img src="https://d112y698adiu2z.cloudfront.net/photos/production/software_photos/004/068/377/datas/gallery.jpg" alt="VibeMate interface showing the 3D audio visualizer and AI study assistant chat">
                     <p>
                         <a href="https://github.com/RocketRaccons/VibeMate3">View on GitHub</a> |
