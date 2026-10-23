@@ -73,3 +73,9 @@ prevents it.
   bug is real.
 - **Sprint 0:** The design system promised no overflow at 375px, but the mobile test ran at
   412px. Tests must check the exact standard the docs promise.
+- **Sprint 1 prep:** `git add -A` swept a file the owner had just dropped into the repo (a
+  resume PDF with a phone number) into a commit and onto a public branch before it was reviewed.
+  Stage explicit paths (`git add <files>`), and check `git status` for unexpected files first.
+- **Sprint 1 prep:** Reverting a deliberately broken file with `git checkout` restored the last
+  _commit_ and wiped uncommitted work. When checking that a test can fail, back the file up and
+  restore from the backup.

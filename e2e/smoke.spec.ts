@@ -59,3 +59,11 @@ test("unknown hackathon slugs show the 404 page", async ({ page }) => {
   await page.goto("/hackathons/not-a-real-event");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
 });
+
+test("resume PDF is downloadable", async ({ page, request }) => {
+  await page.goto("/resume");
+  const href = await page.getByRole("link", { name: /Download PDF/ }).getAttribute("href");
+  const res = await request.get(href!);
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("application/pdf");
+});

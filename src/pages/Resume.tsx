@@ -35,7 +35,15 @@ function Section({ n, title, children }: { n: string; title: string; children: R
 export function Resume() {
   return (
     <>
-      <PageHeader title="Resume" prompt="Education, experience, and projects." />
+      <PageHeader title="Resume" prompt="Education, experience, and projects.">
+        <a
+          href={resume.pdf}
+          download="TuanHoang_Resume.pdf"
+          className="mt-6 inline-block border-2 border-ink bg-gold-bright px-4 py-2 font-mono text-sm font-bold shadow-block-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+        >
+          Download PDF ↓
+        </a>
+      </PageHeader>
       <div className="mx-auto max-w-3xl px-4 pb-20 sm:px-8">
         <Section n="01" title="Education">
           {resume.education.map((e) => (

@@ -69,6 +69,8 @@ export interface SkillGroup {
 }
 
 export interface Resume {
+  /** Path to the downloadable PDF in public/. */
+  pdf: string;
   education: ResumeEntry[];
   skills: SkillGroup[];
   experience: ResumeEntry[];

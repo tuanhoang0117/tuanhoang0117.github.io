@@ -1,107 +1,107 @@
 import type { Resume } from "./types";
 
+// Mirrors public/resume.pdf, which is the source of truth. Update both together.
 export const resume: Resume = {
+  pdf: "/resume.pdf",
   education: [
     {
       title: "California Polytechnic State University, San Luis Obispo",
       location: "San Luis Obispo, CA",
-      detail: "B.S. Computer Science — Expected May 2028",
-      bullets: [],
-    },
-    {
-      title: "Folsom Lake College",
-      location: "Folsom, CA",
-      detail:
-        "A.S. Computer Science | A.A. Interdisciplinary Studies: Math and Science | GPA: 3.7/4.0 — May 2026",
+      detail: "B.S. Computer Science | GPA: 3.76/4.0 — Expected May 2028",
       bullets: [
-        "Coursework: Object Oriented Programming (C++), Discrete Structures, Data Structures, Algorithm Design/Problem Solving, Multivariable Calculus, Linear Algebra, Differential Equations",
+        "Relevant coursework: Data Structures, Algorithm Design, Discrete Structures, Object-Oriented Programming (C++), Database Management Systems (SQL), Algorithms and Complexity",
       ],
     },
   ],
   skills: [
-    { label: "Languages", glyph: "square", skills: ["Python", "TypeScript", "JavaScript", "C++"] },
+    {
+      label: "Languages",
+      glyph: "square",
+      skills: ["TypeScript", "JavaScript", "Python", "SQL", "C++"],
+    },
     {
       label: "Backend & Data",
       glyph: "circle",
       skills: [
         "Node.js",
-        "Express.js",
+        "Express",
         "FastAPI",
+        "PostgreSQL",
+        "Prisma",
         "Redis",
         "MongoDB",
-        "Firebase (Cloud Firestore)",
         "REST API design",
       ],
     },
     {
-      label: "AI / ML",
+      label: "Testing & DevOps",
       glyph: "diamond",
-      skills: ["Retrieval-augmented generation (RAG)", "Google Gemini", "OpenCV", "NumPy"],
+      skills: [
+        "Node test runner",
+        "Supertest",
+        "Vitest",
+        "Docker",
+        "Docker Compose",
+        "GitHub Actions",
+      ],
     },
     {
       label: "Frontend",
       glyph: "triangle",
-      skills: ["React Native", "Next.js", "Tailwind CSS", "Three.js"],
+      skills: ["Angular", "Next.js", "React", "React Native"],
     },
-    { label: "Tools", glyph: "plus", skills: ["Git", "Postman", "Xcode", "Android Studio"] },
+    { label: "Tools", glyph: "plus", skills: ["Git", "Postman", "Google Gemini API"] },
   ],
   experience: [
     {
-      title: "Develop for Good | Software Engineer",
-      location: "Remote",
-      detail: "Web Team – TAR Syndrome Association (nonprofit client) — May 2026 – Aug. 2026",
+      title: "Cal Poly Racing | Software Team Member",
+      location: "San Luis Obispo, CA",
+      detail: "Part-tracking web app (Angular, TypeScript) — Aug. 2026 – Present",
       bullets: [
-        "Raised the client site's Google Lighthouse score from 72 to 87 by remediating WCAG accessibility failures: corrected text/background contrast ratios, restored semantic H1–H3 heading hierarchy, and replaced ambiguous link elements with accessible button controls.",
-        "Built and shipped 2 responsive pages for a rare-disease patient advocacy org, structuring navigation and link components so non-technical staff could update content post-handoff without developer support.",
-        "Integrated Mailchimp for community lead capture and configured the org's online donation flow; authored the PRD, client handoff guide, and Demo Day technical presentation that transferred ownership to the client.",
+        "Built a permission-aware Angular dialog that shows a part's template and instance notes side by side and saves only the changed field, covered by 11 unit tests.",
+        "Fixed read-only users being unable to expand parts-table rows by checking permissions before blocking click events in two shared editable components, with 5 tests.",
+        "Eliminated a yearly manual code edit by deriving the serial-number season prefix from the active season in the database instead of a hardcoded value.",
       ],
     },
     {
-      title: "UCSD Summer Internship Prep Program",
-      location: "La Jolla, CA",
+      title: "Hack4Impact Cal Poly | Software Developer",
+      location: "San Luis Obispo, CA",
+      detail: "Cal Poly Food Pantry inventory site — Aug. 2026 – Present",
       bullets: [
-        "Built a real-time computer vision system (Python, OpenCV) that measures how full a space is by splitting the camera view into a 36-cell grid and reading occupancy live at 30+ FPS, giving an at-a-glance capacity check.",
+        "Delivered the FoodItem data model, MongoDB-backed GET/POST API routes, and add-item and confirm-delete modals for a 6-person team's Next.js inventory site across 7 merged PRs, with 7 Vitest tests.",
+      ],
+    },
+    {
+      title: "Develop for Good | Volunteer Developer",
+      location: "Remote",
+      detail: "Web Team – TAR Syndrome Association (nonprofit client) — May 2026 – Aug. 2026",
+      bullets: [
+        "Raised the client site's Google Lighthouse Accessibility score (desktop) from 72 to 87 by remediating WCAG failures: corrected contrast ratios, restored H1–H3 heading hierarchy, and replaced ambiguous links with accessible buttons.",
+        "Delivered 2 of 8 pages in a nonprofit site redesign by implementing Figma hi-fi designs in Square Online and revising them through weekly client reviews.",
       ],
     },
   ],
   projects: [
     {
-      title: "ZIP | SacHacks (Next.js, React, Mapbox GL, Turf.js)",
-      location: "Sacramento, CA",
+      title: "Weather Proxy API | Node.js, Express, Redis, Docker",
       bullets: [
-        "Built an MVP decision-support platform that ranks U.S. ZIP codes for housing investment opportunity, rendering national results in an interactive Mapbox GL map with choropleth, heatmap, and 3D building views.",
-        "Designed a weighted composite scoring model over demographic growth and income data, built on a CSV ingestion pipeline that stitches mismatched multi-source inputs by ZIP/ZCTA so rankings stay explainable instead of a black box.",
-        "Built a drilldown analytics view with score-context charts (SWR, Recharts) and a U.S. Census TIGERweb boundary fallback, so ZIP polygon geometry still renders correctly when source data is incomplete.",
+        "Cut median response time for repeat-city requests from 138 ms to 1.6 ms (86x) by placing a Redis cache-aside layer with configurable TTL in front of the Visual Crossing weather API.",
+        "Kept the API serving requests through a Redis outage by designing the cache to fail open to the upstream API, verified with 7 CI tests covering cache hit/miss, 404/502 mapping, outage fallback, and 429 rate limiting.",
       ],
     },
     {
-      title: "Oculus MD | QuackHacks 3 (OpenCV, Google Gemini, FastAPI, MongoDB)",
-      location: "Eugene, OR",
+      title: "Blogging Platform API | Express, PostgreSQL, Prisma, Docker",
       bullets: [
-        "Built the FastAPI backend for a medication-safety app, implementing 4 MongoDB-backed validation checks (drug interactions, contraindications, dose ceilings, re-dose timing) that reject unsafe combinations such as Warfarin + Metronidazole before dispensing.",
-        "Enforced a server-side guardrail layer that constrains the model to cross-reference the prescribing instructions and drug database rather than generating independent medical judgments.",
+        "Verified full CRUD and case-insensitive keyword search against a real PostgreSQL database with 13 integration tests running in GitHub Actions CI.",
+        "Cut test-suite runtime from 10.4 s to 0.43 s (24x) by diagnosing an unclosed Prisma connection pool that kept Node alive and closing it in a teardown hook.",
+        "Reduced project setup to one command with no local installs by packaging the API and Postgres in Docker Compose with health-checked startup and automatic migrations.",
       ],
     },
     {
-      title: "Weather Proxy API | Personal Project (Node.js, Express, Redis)",
+      title: "Oculus MD | QuackHacks 3 – FastAPI, MongoDB, Gemini",
       bullets: [
-        "Built a REST service that proxies a third-party weather API behind a Redis cache-aside layer with configurable TTL, cutting repeat-city requests to a single upstream call and keeping the service responsive when the provider is slow.",
-        "Hardened the API with per-IP rate limiting, a dependency-independent health endpoint, and a uniform error contract mapping upstream and client failures to distinct 400/404/429/502 responses instead of generic 500s.",
-      ],
-    },
-    {
-      title: "Sprout Food Diet App | Personal Project (React Native, Python/FastAPI)",
-      location: "Sacramento, CA",
-      bullets: [
-        "Designed the retrieval backend for a RAG chatbot: an ingestion pipeline that chunks nutrition sources into a vector store with deduplication, so every response traces to a citable document.",
-        "Served retrieval and generation through a Python/FastAPI API consumed by a cross-platform React Native client, returning grounded answers in under 200 ms.",
-      ],
-    },
-    {
-      title: "VibeMate | Winner – Hack with MLH and DigitalOcean (Three.js, Web Audio API)",
-      location: "San Francisco, CA",
-      bullets: [
-        "Structured a real-time emotion-driven web app into modular scene, audio, and UI managers with async initialization and graceful fallbacks, keeping the live demo stable under load.",
+        "Flagged unsafe medication combinations such as Warfarin + Metronidazole by building a FastAPI backend with 3 MongoDB-backed checks: drug interactions, contraindications, and re-dose timing.",
+        "Kept safety verdicts deterministic by limiting Gemini 2.5 Flash to identifying medications from camera and document images, with every decision computed by a rule-based engine against the drug database.",
       ],
     },
   ],
