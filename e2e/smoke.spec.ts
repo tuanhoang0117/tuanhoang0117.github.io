@@ -3,9 +3,12 @@ import { expect, test } from "@playwright/test";
 
 const routes = [
   { path: "/", h1: "Tuan Hoang" },
+  { path: "/hackathons", h1: "Hackathons" },
+  { path: "/hackathons/oculusmd", h1: "oculusMD" },
   { path: "/portfolio", h1: "Portfolio" },
   { path: "/resume", h1: "Resume" },
   { path: "/contact", h1: "Contact" },
+  { path: "/lab", h1: "Pixel Lab" },
 ];
 
 for (const { path, h1 } of routes) {
@@ -50,4 +53,9 @@ test("nav moves between pages", async ({ page }) => {
   await page.getByRole("link", { name: "Resume" }).click();
   await expect(page).toHaveURL("/resume");
   await expect(page.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
+});
+
+test("unknown hackathon slugs show the 404 page", async ({ page }) => {
+  await page.goto("/hackathons/not-a-real-event");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
 });
