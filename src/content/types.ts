@@ -37,7 +37,13 @@ export interface Hackathon {
   /** ISO date (YYYY-MM-DD or YYYY-MM) of the event start. Optional until confirmed. */
   date?: string;
   location?: string;
+  /** What the project is. Describes the team's project. */
   summary: string;
+  /**
+   * What Tuan personally built or did, in first person. Required so team work and individual
+   * work are never blurred. Never name teammates.
+   */
+  role: string;
   stack: string[];
   /** Award text, e.g. "Winner, Best Beginner Project". Absent if the project didn't place. */
   placement?: string;

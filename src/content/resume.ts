@@ -1,6 +1,6 @@
 import type { Resume } from "./types";
 
-// Mirrors public/resume.pdf, which is the source of truth. Update both together.
+// Mirrors public/resume.pdf, which is the source of truth, except where noted. Update both together.
 export const resume: Resume = {
   pdf: "/resume.pdf",
   education: [
@@ -56,12 +56,9 @@ export const resume: Resume = {
     {
       title: "Cal Poly Racing | Software Team Member",
       location: "San Luis Obispo, CA",
-      detail: "Part-tracking web app (Angular, TypeScript) — Aug. 2026 – Present",
-      bullets: [
-        "Built a permission-aware Angular dialog that shows a part's template and instance notes side by side and saves only the changed field, covered by 11 unit tests.",
-        "Fixed read-only users being unable to expand parts-table rows by checking permissions before blocking click events in two shared editable components, with 5 tests.",
-        "Eliminated a yearly manual code edit by deriving the serial-number season prefix from the active season in the database instead of a hardcoded value.",
-      ],
+      // Role only on the website: the club has cleared details for the PDF resume, not the site.
+      detail: "Part-tracking web app — Aug. 2026 – Present",
+      bullets: [],
     },
     {
       title: "Hack4Impact Cal Poly | Software Developer",

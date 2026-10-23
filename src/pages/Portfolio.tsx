@@ -74,6 +74,10 @@ export function Portfolio() {
                 />
               )}
               <p className="mt-4">{h.summary}</p>
+              <p className="mt-3">
+                <span className="label-mono text-poly">My part — </span>
+                {h.role}
+              </p>
               <Stack items={h.stack} />
               <Links links={h.links} />
             </article>

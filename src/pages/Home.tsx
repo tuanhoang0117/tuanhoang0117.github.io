@@ -18,8 +18,8 @@ export function Home() {
         <div className="max-w-prose space-y-4">
           <p className="label-mono text-poly">Chapter 00 — under construction</p>
           <p className="text-lg">
-            I'm a third-year computer science student. I build things at hackathons, play
-            volleyball, and play video games.
+            I'm a computer science student at Cal Poly SLO, originally from Sacramento. I build
+            things at hackathons, play volleyball, and play video games.
           </p>
           <Link
             to="/portfolio"

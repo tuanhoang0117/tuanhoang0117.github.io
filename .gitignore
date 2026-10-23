@@ -22,3 +22,6 @@ coverage
 !.vscode/settings.json
 .idea
 .DS_Store
+
+# Private notes: never commit
+private/
