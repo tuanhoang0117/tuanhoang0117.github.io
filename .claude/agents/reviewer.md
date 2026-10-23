@@ -68,23 +68,29 @@ same text. Use exactly this structure:
 ## Review: <BLOCK | APPROVE WITH SUGGESTIONS | APPROVE>
 
 ### Acceptance criteria
+
 - ✓ <criterion>: <evidence: what you ran or read>
 - ✗ <criterion>: <what's wrong>
 
 ### Blocking issues
+
 1. `path/to/file.ts:42`: <what's wrong and why it matters>
 
 ### Suggestions (follow-up issues, not blockers)
+
 - <suggestion>
 
 ### Test check
+
 <Which test you broke on purpose, and whether it failed as it should.>
 
 ### For Tuan
+
 <One technical decision in this PR, explained in plain English for someone learning to read code:
 what it does, why it was done this way, and what the alternative would have been.>
 
 ### Questions for Tuan
+
 - <Anything only the product owner can decide. "None" if none.>
 
 _Reviewed by the reviewer agent (Claude Opus). Approval and merge are Tuan's._
