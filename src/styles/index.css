@@ -46,6 +46,11 @@
   --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-pixel: "Silkscreen", "JetBrains Mono Variable", monospace;
 
+  /* Fluid page-title size: scales with the viewport so long one-word titles ("HACKATHONS")
+     never overflow a phone screen, capped at the desktop size. */
+  --text-display: clamp(2.5rem, 10.5vw, 6rem);
+  --text-display--line-height: 0.9;
+
   /* Hard, blur-free block shadows. Never use blurred shadows. */
   --shadow-block-sm: 3px 3px 0 0 var(--color-ink);
   --shadow-block: 6px 6px 0 0 var(--color-ink);

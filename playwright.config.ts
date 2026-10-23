@@ -15,7 +15,8 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    // 375px: the narrowest common phone, and the width docs/design-system.md promises.
+    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 740 } } },
   ],
   // Tests always build and serve fresh. Reusing a running server once let a stale build pass
   // tests that should have failed.

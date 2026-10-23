@@ -71,3 +71,5 @@ prevents it.
 - **Sprint 0:** A fake bug (a zero-height wide div) didn't trigger overflow, so "the test passes"
   briefly looked like a broken test. When checking that a test can fail, make sure the injected
   bug is real.
+- **Sprint 0:** The design system promised no overflow at 375px, but the mobile test ran at
+  412px. Tests must check the exact standard the docs promise.
