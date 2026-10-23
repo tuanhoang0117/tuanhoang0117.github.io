@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hackathons } from "./hackathons";
 import { projects } from "./projects";
+import { resume } from "./resume";
 import { socials } from "./site";
 import type { Image, Link } from "./types";
 
@@ -29,6 +30,11 @@ describe("content", () => {
 
   it("every image has alt text", () => {
     for (const img of allImages) expect(img.alt.trim()).not.toBe("");
+  });
+
+  it("each skill group has its own glyph", () => {
+    const glyphs = resume.skills.map((g) => g.glyph);
+    expect(new Set(glyphs).size).toBe(glyphs.length);
   });
 
   it("hackathon dates are ISO when present", () => {

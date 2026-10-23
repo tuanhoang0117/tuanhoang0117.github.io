@@ -19,9 +19,10 @@ export const resume: Resume = {
     },
   ],
   skills: [
-    { label: "Languages", skills: ["Python", "TypeScript", "JavaScript", "C++"] },
+    { label: "Languages", glyph: "square", skills: ["Python", "TypeScript", "JavaScript", "C++"] },
     {
       label: "Backend & Data",
+      glyph: "circle",
       skills: [
         "Node.js",
         "Express.js",
@@ -34,10 +35,15 @@ export const resume: Resume = {
     },
     {
       label: "AI / ML",
+      glyph: "diamond",
       skills: ["Retrieval-augmented generation (RAG)", "Google Gemini", "OpenCV", "NumPy"],
     },
-    { label: "Frontend", skills: ["React Native", "Next.js", "Tailwind CSS", "Three.js"] },
-    { label: "Tools", skills: ["Git", "Postman", "Xcode", "Android Studio"] },
+    {
+      label: "Frontend",
+      glyph: "triangle",
+      skills: ["React Native", "Next.js", "Tailwind CSS", "Three.js"],
+    },
+    { label: "Tools", glyph: "plus", skills: ["Git", "Postman", "Xcode", "Android Studio"] },
   ],
   experience: [
     {

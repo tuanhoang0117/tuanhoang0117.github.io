@@ -59,8 +59,12 @@ export interface ResumeEntry {
   bullets: string[];
 }
 
+/** Game-UI category icon. Each maps to one shape and one glyph-* color. */
+export type Glyph = "square" | "triangle" | "diamond" | "circle" | "plus";
+
 export interface SkillGroup {
   label: string;
+  glyph: Glyph;
   skills: string[];
 }
 
