@@ -71,6 +71,33 @@ On `v2`:
   approval doesn't count.
 - New commits after an approval cancel it.
 
+Branches must be **up to date** with `v2` before merging. When one PR merges, every other open PR
+must update, and both agents check it again, because what they approved is no longer what would
+merge. It costs a few minutes of agent time per PR, and it catches two PRs that pass separately and
+break together. Tuan chose quality over speed here.
+
+### Overriding a BLOCK
+
+If Tuan disagrees with the reviewer, he posts `agent/review: success` himself, from his own
+account, with the reason in the description:
+
+```bash
+gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> \
+  -f state=success -f context=agent/review -f description="Override by Tuan: <reason>"
+```
+
+GitHub records who posted every status, so the history shows the override and its reason. A human
+can always overrule an agent, and the overrule is never silent.
+
+### Known limitation
+
+Every agent role uses the same bot token, so GitHub can't tell QA, the reviewer, and an engineer
+apart. An engineer agent could technically post `agent/review: success` on its own PR. The
+engineer's instructions forbid it, but that's a rule, not enforcement. The checks reliably stop
+**honest mistakes** (like merging before the reviews exist), not a misbehaving agent. Tuan's
+required code-owner approval is the real backstop. The full fix is a separate identity per role (a
+GitHub App per agent), so the required checks can be pinned to the reviewer's identity alone.
+
 `main` (the live site) requires a PR and an approval. It gains the CI requirement at cutover.
 Until then `v2` is the repo's default branch, so `Closes #N` in a PR closes its issue on merge.
 GitHub Pages still publishes from `main`.

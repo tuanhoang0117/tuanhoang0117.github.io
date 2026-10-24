@@ -68,6 +68,7 @@ stopped on. Be plain about gaps. A reported gap is fine; a hidden one is a failu
 ## Never
 
 - Push to `v2` or `main`, merge, or approve anything.
+- Post or change the `agent/qa` or `agent/review` checks. Only QA and the reviewer post those.
 - Change files outside your ownership list.
 - Print, log, or echo the GitHub token, or run git or gh write commands without `scripts/as-bot.sh`.
 - Mark a criterion met without evidence.

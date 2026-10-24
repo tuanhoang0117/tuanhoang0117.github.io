@@ -24,7 +24,8 @@ Issue → engineer agent (own worktree, opens a PR into `v2`) → QA agent and r
 their reports on the PR and publish `agent/qa` and `agent/review` checks) → Tuan approves and
 merges. GitHub blocks merging until CI, both agent checks, and Tuan's approval all pass. `v2` is the
 default branch until cutover, so `Closes #N` closes issues when a PR merges. Full description:
-[docs/agent-workflow.md](docs/agent-workflow.md).
+[docs/agent-workflow.md](docs/agent-workflow.md). Only QA posts `agent/qa` and only the
+reviewer posts `agent/review`. Tuan may override a BLOCK from his own account, on the record.
 
 **Every `git` and `gh` command that talks to GitHub goes through `scripts/as-bot.sh`**, so agent
 work is authored by `tuanhoang-bot`, never by Tuan's account. Never print the token. The bot's
@@ -117,3 +118,10 @@ prevents it.
 - **Sprint 1 dry run:** Claude Code's worktree guard blocked `scripts/as-bot.sh git ...` for agents
   until Tuan allowed the script in his user settings. The engineer stopped instead of working
   around it, which is the behavior we want.
+- **Sprint 1 dry run:** Changing the default branch on GitHub didn't update the local clone's
+  `origin/HEAD`, so new agent worktrees still started from `main`. After changing the default
+  branch, run `git remote set-head origin -a`.
+- **Sprint 1 dry run:** A config comment claimed Node could run extensionless TypeScript imports.
+  It can't, and putting `scripts/` under bundler resolution hid that from the typechecker. The
+  reviewer caught it by testing the claim. `scripts/` now has its own `nodenext` config. Comments
+  that state facts about tools get the same verification as code.
