@@ -22,7 +22,7 @@ body:
     id: owns
     attributes:
       label: Files owned
-      description: The only files this task may create or change. See CLAUDE.md for ownership rules.
+      description: The only files this task may create or change. See docs/agent-guide.md for ownership rules.
     validations:
       required: true
   - type: textarea

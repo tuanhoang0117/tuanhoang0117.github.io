@@ -1,7 +1,7 @@
-# CLAUDE.md
+# Agent guide
 
-Personal portfolio for Tuan Hoang, rebuilt as v2 with a multi-agent workflow. Read this before
-starting any issue.
+Rules for every agent working on Tuan Hoang's portfolio v2, and for the lead session that
+dispatches them. Read it in full, including "Lessons learned", before starting any issue.
 
 ## Commands
 
@@ -24,24 +24,26 @@ Issue → engineer agent (own worktree, opens a PR into `v2`) → QA agent and r
 their reports on the PR and publish `agent/qa` and `agent/review` checks) → Tuan approves and
 merges. GitHub blocks merging until CI, both agent checks, and Tuan's approval all pass. `v2` is the
 default branch until cutover, so `Closes #N` closes issues when a PR merges. Full description:
-[docs/agent-workflow.md](docs/agent-workflow.md). Only QA posts `agent/qa` and only the
-reviewer posts `agent/review`. Tuan may override a BLOCK from his own account, on the record.
+[agent-workflow.md](agent-workflow.md). Only QA posts `agent/qa` and only the reviewer posts
+`agent/review`. Tuan may override a BLOCK from his own account, on the record.
 
 **Every `git` and `gh` command that talks to GitHub goes through `scripts/as-bot.sh`**, so agent
-work is authored by `tuanhoang-bot`, never by Tuan's account. Never print the token. The bot's
-token has no `read:org` scope, so plain `gh pr view` errors: always pass `--json <fields>`.
+work is authored by `tuanhoang-bot`, never by Tuan's account. Claude Code sessions in this repo
+can't reach Tuan's credentials ([`.claude/settings.json`](../.claude/settings.json)), so a plain
+`gh` or `git push` fails instead of acting as him. Never print the token. The bot's token has no
+`read:org` scope, so plain `gh pr view` errors: always pass `--json <fields>`.
 
 ## Stack
 
 React 19, Vite, TypeScript (strict), Tailwind CSS v4, React Router. Unit tests: Vitest + Testing
-Library. E2E: Playwright + axe. Why: [docs/decisions/](docs/decisions/).
+Library. E2E: Playwright + axe. Why: [decisions/](decisions/).
 
 ## Read before building
 
-- [docs/design-system.md](docs/design-system.md): tokens and the six visual rules
-- [docs/contracts/content-schema.md](docs/contracts/content-schema.md): content data rules
-- [docs/contracts/sprite-format.md](docs/contracts/sprite-format.md): pixel art format
-- [ADR 0002](docs/decisions/0002-no-scroll-gated-content.md): no scroll-gated content
+- [design-system.md](design-system.md): tokens and the six visual rules
+- [contracts/content-schema.md](contracts/content-schema.md): content data rules
+- [contracts/sprite-format.md](contracts/sprite-format.md): pixel art format
+- [ADR 0002](decisions/0002-no-scroll-gated-content.md): no scroll-gated content
 
 ## File ownership
 
@@ -50,6 +52,7 @@ you own; touch nothing else.
 
 | Path                                                | Owner                                             |
 | --------------------------------------------------- | ------------------------------------------------- |
+| `src/content/**` (site copy and data)               | Lead only, approved by Tuan.                      |
 | `src/styles/index.css` (tokens)                     | Lead only. Need a token? Say so in the PR.        |
 | `src/content/types.ts`, `src/pixel/types.ts`        | Lead only. Contract changes get their own issue.  |
 | `src/App.tsx` (routes)                              | Lead only. Routes are pre-registered.             |
@@ -72,10 +75,11 @@ A PR is ready for review only when all of these are true:
 
 ## Conventions
 
-- Copy in Tuan's voice or about his work (bios, prompts, invitations, project text) lives in
-  `src/content/`, never in JSX. UI mechanics may live in components: button states ("Copied!"),
-  dividers ("or"), and screen-reader hints ("(opens in a new tab)"). If a page needs voice copy
-  and `src/content/` has no field for it, stop and say so in the PR.
+- Site copy (bios, prompts, invitations, project text) lives only in `src/content/`, never in JSX.
+  Engineer agents don't write or edit it, and every change to it goes through a PR Tuan approves.
+  Components may hold UI mechanics: button states ("Copied!"), dividers ("or"), and screen-reader
+  hints ("(opens in a new tab)"). If a page needs copy that `src/content/` has no field for, stop
+  and say so in the PR.
 - Tokens only: no raw hex, no arbitrary Tailwind `[...]` values in components.
 - Match surrounding code: named exports, function components, comments only where the code
   can't explain itself.
@@ -83,6 +87,8 @@ A PR is ready for review only when all of these are true:
 - Never push to `v2` or `main`. Branch protection rejects it anyway. All work merges into `v2`
   through a PR that Tuan approves.
 - Stage explicit paths (`git add <files>`), never `git add -A` or `git add .`.
+- Write PR bodies, comments, and reports to a fresh file from `mktemp`, never a fixed path like
+  `/tmp/qa8.md`. Parallel agents writing to one path post each other's reports.
 
 ## Lessons learned
 
@@ -120,8 +126,14 @@ prevents it.
   around it, which is the behavior we want.
 - **Sprint 1 dry run:** Changing the default branch on GitHub didn't update the local clone's
   `origin/HEAD`, so new agent worktrees still started from `main`. After changing the default
-  branch, run `git remote set-head origin -a`.
+  branch, run `git remote set-head origin -a`, then start a fresh session: the session that ran
+  it still made worktrees from `main`. Verified in a fresh session (#10): a new worktree started
+  at `origin/v2`, not at `main` or the lead's local branch, so engineers never build on the lead's
+  unmerged commits.
 - **Sprint 1 dry run:** A config comment claimed Node could run extensionless TypeScript imports.
   It can't, and putting `scripts/` under bundler resolution hid that from the typechecker. The
   reviewer caught it by testing the claim. `scripts/` now has its own `nodenext` config. Comments
-  that state facts about tools get the same verification as code.
+  that state facts about tools get the same verification as code. (`nodenext` still accepts
+  `./x.js` for a `.ts` file, which Node can't run: write `.ts` endings.)
+- **Sprint 1 dry run:** QA wrote its report to a fixed `/tmp/qa8.md` and found a previous run's
+  report there. Report bodies now go in `mktemp` files.

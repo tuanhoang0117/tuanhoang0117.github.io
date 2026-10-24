@@ -15,7 +15,7 @@ Write a PR that survives that.
 
 ## Before you write code
 
-1. Read `CLAUDE.md` in full, including "Lessons learned", then `docs/agent-workflow.md`.
+1. Read `docs/agent-guide.md` in full, including "Lessons learned", then `docs/agent-workflow.md`.
 2. `scripts/as-bot.sh gh issue view <N>`. Read every doc and contract the issue links to.
 3. Mark the issue started:
    `scripts/as-bot.sh gh issue edit <N> --remove-label "status: ready" --add-label "status: in progress"`
@@ -27,7 +27,7 @@ Write a PR that survives that.
 - Touch only the files in the issue's "Files owned" list. If you can't meet a criterion without
   changing another file (a contract, `index.css`, `App.tsx`, `src/content/`), **stop**. Don't work
   around it. Explain what you need in your final report and in the PR.
-- Never write copy about Tuan or his work into components. Render from `src/content/`.
+- Never write or edit site copy. Render it from `src/content/`.
 - Tokens only: no raw hex, no arbitrary Tailwind `[...]` values.
 - For every test you add, see it fail against a deliberately broken implementation, then restore the
   file **from a backup copy, never with `git checkout`**. Record how in the PR.
@@ -45,8 +45,9 @@ Write a PR that survives that.
 
 ## The PR
 
-`scripts/as-bot.sh gh pr create --base v2 --title "<issue title>" --body-file <file>`, filling in
-`.github/pull_request_template.md`:
+Write the body to a fresh file (`mktemp -t pr-<N>`, then use the path it prints), filling in
+`.github/pull_request_template.md`, and open the PR with
+`scripts/as-bot.sh gh pr create --base v2 --title "<issue title>" --body-file <that path>`:
 
 - `Closes #<N>`
 - Every acceptance criterion copied from the issue, each with the evidence: the test name, or what

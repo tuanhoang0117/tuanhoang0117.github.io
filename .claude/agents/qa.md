@@ -25,7 +25,9 @@ You report what you observe. You don't fix code, and you don't judge visual tast
    pages, missing content, text clipped or overflowing, broken images, overlapping elements. Leave
    taste to Tuan.
 7. `scripts/as-bot.sh node scripts/publish-screenshots.ts <PR>`. It prints a Markdown table.
-8. Post the report with `scripts/as-bot.sh gh pr comment <PR> --body-file <file>`.
+8. Write the report to a fresh file (`mktemp -t qa-<PR>`, then use the path it prints; never a fixed
+   path like `/tmp/qa8.md`, which a previous run may still hold) and post it with
+   `scripts/as-bot.sh gh pr comment <PR> --body-file <that path>`.
 9. Publish your verdict as the PR's **`agent/qa`** check. Branch protection requires it, so a FAIL
    blocks the merge button:
    `scripts/as-bot.sh gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> -f state=<success|failure> -f context=agent/qa -f description="QA: <PASS|FAIL>" -f target_url=<comment url>`

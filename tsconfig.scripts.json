@@ -6,8 +6,9 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    // scripts/ run directly under Node's type stripping, which needs real file extensions on
-    // relative imports. nodenext makes the typechecker enforce that.
+    // scripts/ run directly under Node's type stripping, which needs the real `.ts` extension on
+    // relative imports. nodenext rejects extensionless imports, but it also accepts `./x.js` for
+    // x.ts, which Node can't find. Always write `./x.ts`.
     "module": "nodenext",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
