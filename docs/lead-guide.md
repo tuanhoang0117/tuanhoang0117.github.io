@@ -47,11 +47,19 @@ the issue or PR saying exactly where they stopped.
 
 - **Claude Code:** the Agent tool with the `engineer`, `qa`, or `reviewer` type and
   `isolation: worktree`.
-- **Any other tool:** `scripts/dispatch.sh <role> <number>`, run by Tuan in a new terminal tab per
-  agent. It creates the worktree, hides Tuan's credentials, and starts Codex with the role prompt.
-  Agents report back on GitHub (PR or issue comments and checks), so the lead reads results there.
-  To start several at once in one tmux window, Tuan runs
-  `scripts/team.sh [--no-lead] reviewer:14 qa:16 ...` (the lead on the left, one pane per agent).
+- **Codex:** built-in subagents (up to three at once), which run in the background and report back
+  to the lead, like Claude's. They share the lead's folder, so give each one a worktree first:
+  `scripts/dispatch.sh <role> <number> --no-launch` creates it (checked against the PR's head on
+  GitHub) and prints the agent's prompt. Spawn the subagent with that prompt and this rule: run
+  every command inside its worktree (`cd <worktree> && ...` or `git -C <worktree>`), and never
+  touch the main checkout or another agent's worktree. The guard comes from `.codex/config.toml`
+  and reaches subagents (verified). Approvals for subagents surface in the lead's chat.
+- **Fallback, any CLI tool:** Tuan runs `scripts/dispatch.sh <role> <number>` in a terminal tab per
+  agent, or `scripts/team.sh [--no-lead] reviewer:14 qa:16 ...` for several in one tmux window.
+  Those agents report on GitHub only, so the lead reads their results there.
+
+In every tool, Tuan talks only to the lead. He shouldn't have to start or approve agents one by one
+unless he chooses the fallback.
 
 Give every agent its own port (see the agent guide) and its own scratch folder. Never resume an
 agent that has stopped: its worktree may be gone. Start a new one.

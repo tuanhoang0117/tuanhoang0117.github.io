@@ -12,8 +12,9 @@ The rules are the same whichever tool runs them.
    and follow the rest.
 
 Every `git` or `gh` command that writes to GitHub goes through `scripts/as-bot.sh`, so the work is
-authored by `tuanhoang-bot`, never by Tuan. Start agents with `scripts/dispatch.sh`, which also
-hides Tuan's own GitHub credentials from the session.
+authored by `tuanhoang-bot`, never by Tuan. Codex sessions here can't reach Tuan's own GitHub login
+([`.codex/config.toml`](.codex/config.toml)), so a plain `gh` or `git push` fails instead of acting
+as him. If plain `gh api user -q .login` ever prints a username, stop and tell Tuan.
 
 Sign your work with the tool and model you actually are (for example "OpenAI Codex, gpt-5-codex"),
 even where an instruction file shows a Claude model as the example.

@@ -8,7 +8,7 @@ human decides.** GitHub enforces the last part, so it doesn't depend on anyone r
 | Role          | Who                                                     | Does                                                                           | Can't                                         |
 | ------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------- |
 | Product owner | Tuan                                                    | Approves issues, judges how things look, approves and merges every PR          | Merge without green CI (admins are bound too) |
-| Lead          | Claude Code (main session)                              | Writes issues and contracts, dispatches agents, owns shared files, runs retros | Merge, or push to `v2` / `main`               |
+| Lead          | Claude Code or Codex (main session)                     | Writes issues and contracts, dispatches agents, owns shared files, runs retros | Merge, or push to `v2` / `main`               |
 | Engineer      | [`engineer`](../.claude/agents/engineer.md) agent, Opus | Builds one issue in its own worktree and opens a PR                            | Touch files outside its issue, merge          |
 | QA            | [`qa`](../.claude/agents/qa.md) agent, Sonnet           | Re-runs every test on a clean checkout, posts screenshots at desktop and 375px | Edit code, judge taste                        |
 | Reviewer      | [`reviewer`](../.claude/agents/reviewer.md) agent, Opus | Verifies each criterion itself, breaks a test on purpose, posts a verdict      | Edit code, approve, merge, judge taste        |
@@ -152,10 +152,14 @@ any one tool:
   (Claude Code) both point to the [agent guide](agent-guide.md) and [lead guide](lead-guide.md).
 - **State:** GitHub is the source of truth. The lead also keeps a local handoff note
   (`private/handoff.md`) with what's in flight and what's waiting on Tuan.
-- **Dispatching:** Claude Code uses its Agent tool. Codex agents start with
-  [`scripts/dispatch.sh`](../scripts/dispatch.sh), one terminal tab each, which creates the
-  worktree and applies the same credential guard as `.claude/settings.json`.
-  [`scripts/team.sh`](../scripts/team.sh) opens the lead and several agents in one tmux window.
+- **Dispatching:** either lead runs agents in the background and Tuan talks only to the lead.
+  Claude Code uses its Agent tool with worktree isolation. Codex uses its built-in subagents, each
+  in a worktree created by [`scripts/dispatch.sh`](../scripts/dispatch.sh) `--no-launch`.
+  [`scripts/team.sh`](../scripts/team.sh) is a fallback that opens agents as separate terminal
+  sessions in tmux.
+- **Credential guard:** `.claude/settings.json` (Claude Code) and
+  [`.codex/config.toml`](../.codex/config.toml) (Codex) set the same variables, so plain `gh` and
+  `git push` fail in both and only `scripts/as-bot.sh` reaches GitHub.
 
 Only one lead runs at a time, and every PR and review names the tool and model that produced it.
 
