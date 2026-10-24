@@ -1,0 +1,11 @@
+# Codex project settings. They load only after the repo is trusted in Codex.
+#
+# Hides Tuan's GitHub login from every command Codex runs here, including its subagents' commands:
+# the same guard .claude/settings.json gives Claude Code. Plain gh and git push fail, and
+# scripts/as-bot.sh brings the bot's own token.
+[shell_environment_policy.set]
+GH_CONFIG_DIR = "/var/empty"
+GIT_CONFIG_COUNT = "1"
+GIT_CONFIG_KEY_0 = "credential.helper"
+GIT_CONFIG_VALUE_0 = ""
+GIT_TERMINAL_PROMPT = "0"

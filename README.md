@@ -16,6 +16,7 @@ independent reviewer agent, and human review.
 | [`docs/design-system.md`](docs/design-system.md) | Tokens and visual rules every page follows                              |
 | [`docs/contracts/`](docs/contracts/)             | Shared specs that parallel agents build against                         |
 | [`docs/agent-guide.md`](docs/agent-guide.md)     | Agent instructions, file ownership, definition of done, lessons learned |
+| [`docs/lead-guide.md`](docs/lead-guide.md)       | How the lead session runs sprints, and hands off between AI tools       |
 | Issues and PRs                                   | Every change, its acceptance criteria, its tests, and its review        |
 
 ## Development
