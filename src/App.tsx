@@ -6,7 +6,6 @@ import { Hackathons } from "./pages/Hackathons";
 import { Home } from "./pages/Home";
 import { Lab } from "./pages/Lab";
 import { BannerLab } from "./pages/lab/BannerLab";
-import { MascotLab } from "./pages/lab/MascotLab";
 import { MotionLab } from "./pages/lab/MotionLab";
 import { PhysicsLab } from "./pages/lab/PhysicsLab";
 import { TitleLab } from "./pages/lab/TitleLab";
@@ -39,7 +38,6 @@ export function App() {
         <Route path="lab/motion" element={<MotionLab />} />
         <Route path="lab/banner" element={<BannerLab />} />
         <Route path="lab/title" element={<TitleLab />} />
-        <Route path="lab/mascot" element={<MascotLab />} />
         <Route path="lab/physics" element={<PhysicsLab />} />
         {Object.entries(legacyRedirects).map(([from, to]) => (
           <Route key={from} path={from} element={<Navigate to={to} replace />} />
