@@ -4,7 +4,8 @@
  *
  * - `shadows`: accent block-shadow colors, cycled across a page's cards.
  * - `wash`: a light background for bands and feature cards (ink text on it).
- * - `accentText`: the one accent that's dark enough for text on light surfaces.
+ * - `accentText`: text in an accent color. Poly Green on every page: it's the only palette color
+ *   that passes AA on paper, cards, and every wash (Morro Cove fails on washes, 4.1–4.5:1).
  */
 export interface PageTheme {
   primary: string;
@@ -27,7 +28,7 @@ export const pageThemes = {
     secondary: "stadium",
     shadows: ["shadow-surf", "shadow-canyon", "shadow-cove", "shadow-heritage"],
     wash: "bg-sky",
-    accentText: "text-cove",
+    accentText: "text-poly",
   },
   portfolio: {
     primary: "dexter",
@@ -41,7 +42,7 @@ export const pageThemes = {
     secondary: "canyon",
     shadows: ["shadow-cove", "shadow-canyon", "shadow-morro"],
     wash: "bg-serenity",
-    accentText: "text-cove",
+    accentText: "text-poly",
   },
   contact: {
     primary: "heritage",

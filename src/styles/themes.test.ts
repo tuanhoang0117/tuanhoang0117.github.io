@@ -47,12 +47,37 @@ const hex = (name: string) => {
 const colorOf = (utility: string) => utility.replace(/^(shadow|bg|text)-/, "");
 
 describe("Cal Poly palette", () => {
-  it("has the brand colors Tuan supplied, at their exact values", () => {
-    expect(hex("poly")).toBe("#154734");
-    expect(hex("gold")).toBe("#bd8b13");
-    expect(hex("cove")).toBe("#0067b9");
-    expect(hex("heritage")).toBe("#ff6a39");
-    expect(hex("mission")).toBe("#e4e3d3");
+  // The palette Tuan supplied (issue #18), exact values.
+  const supplied = {
+    poly: "#154734",
+    gold: "#bd8b13",
+    "poly-bright": "#3a913f",
+    dexter: "#a4d65e",
+    canyon: "#f2c75c",
+    stadium: "#f8e08e",
+    surf: "#5cb8b2",
+    sky: "#b5e3d8",
+    morro: "#abcae9",
+    serenity: "#d5e4f4",
+    pismo: "#cac7a7",
+    mission: "#e4e3d3",
+    sage: "#b7cdc2",
+    sycamore: "#789f90",
+    seal: "#54585a",
+    kennedy: "#8e9089",
+    avocado: "#d0df00",
+    heritage: "#ff6a39",
+    cove: "#0067b9",
+  };
+
+  it.each(Object.entries(supplied))("has %s at %s", (name, value) => {
+    expect(hex(name)).toBe(value);
+  });
+
+  it("puts white text on the dark fills (poly, cove, seal) at AA or better", () => {
+    for (const fill of ["poly", "cove", "seal"]) {
+      expect(contrast(hex("card"), hex(fill)), fill).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("re-points the older tokens to Cal Poly colors", () => {
@@ -82,6 +107,11 @@ describe("page themes", () => {
         expect(contrast(text, hex("card"))).toBeGreaterThanOrEqual(4.5);
       });
 
+      it("has accent text that also passes AA on its own wash", () => {
+        const text = hex(colorOf(theme.accentText));
+        expect(contrast(text, hex(colorOf(theme.wash)))).toBeGreaterThanOrEqual(4.5);
+      });
+
       it("has a wash that ink text passes AA on", () => {
         expect(contrast(hex("ink"), hex(colorOf(theme.wash)))).toBeGreaterThanOrEqual(4.5);
       });
@@ -102,6 +132,15 @@ describe("tints", () => {
     // Archive columns and washes carry muted labels (dates, captions), not just ink headings.
     expect(contrast(hex("ink"), hex(tint))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(hex("ink-muted"), hex(tint))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("archive accents", () => {
+  it("gives each hackathon tint its own accent color", () => {
+    // src/components/archive/tints.ts maps tints to these accent tokens; two tints sharing one
+    // color would make two columns' offset blocks identical.
+    const accents = ["glyph-orange", "gold", "poly-bright", "glyph-blue", "glyph-purple"].map(hex);
+    expect(new Set(accents).size).toBe(accents.length);
   });
 });
 

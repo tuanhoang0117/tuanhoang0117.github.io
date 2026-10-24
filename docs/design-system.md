@@ -44,15 +44,19 @@ each page adds an accent pair (see Page themes).
 Surfaces and ink stay neutral so the colors read as color: `paper` (page), `paper-deep` (footer,
 Mission Beige), `card` (white), `ink`, `ink-muted`, `ink-faint` (never body text).
 
-**Which colors can be text.** On paper or a white card, only `poly` (10:1), `cove` (5.8:1), and
-`seal` (7:1) pass WCAG AA for text. Every other palette color is a **fill**: backgrounds, washes,
-shadows, borders, glyphs. Ink text on any light fill passes (10:1 or better).
-`src/styles/themes.test.ts` checks these ratios.
+**Which colors can be text.** On paper or a white card, only `poly` (10:1), `cove` (5.4:1 on
+paper, 5.8:1 on white), and `seal` (6.8:1 on paper) pass WCAG AA for text. On a light **wash**,
+only `poly` and `seal` pass: `cove` drops to 4.1–4.5:1, so Morro Cove is never text on a wash.
+Every other palette color is a **fill**: backgrounds, washes, shadows, borders, glyphs. Ink text
+passes AA on every light fill (5.7:1 or better). On the dark fills (`poly`, `cove`, `seal`), text
+is white or paper. The `>>>` prompt arrow is `poly-bright` (3.7:1): a decorative marker before
+text that carries the meaning. `src/styles/themes.test.ts` checks these ratios.
 
 **Older token names** still work and now point at Cal Poly colors: `gold-bright` → Poly Canyon
 (buttons, stickers, selection); `tint-peach/butter/mint/sky/lilac` → Mission, Stadium, Sky, Sky, Serenity
 (archive columns). Every tint is light enough for `ink-muted` labels; no Cal Poly green is, so
-`mint` shares Sky Blue; `glyph-blue/red/purple/orange` → Cove, Heritage, Surf, Gold. Glyphs
+`mint` shares Sky Blue; `glyph-blue/red/purple/orange` → Cove, Poly Green, Surf, Heritage (each archive column
+accent is distinct). Glyphs
 are decorative: they always sit beside their category's text label.
 
 **Focus ring:** 3px `cove` (5.4:1 against paper; WCAG 1.4.11 needs 3:1).
@@ -73,9 +77,9 @@ picking colors ad hoc.
 | Page       | Primary         | Secondary     | Card shadows                 | Wash       | Accent text |
 | ---------- | --------------- | ------------- | ---------------------------- | ---------- | ----------- |
 | Home       | Poly Green      | Mustang Gold  | poly, gold, poly-bright      | `stadium`  | `poly`      |
-| Hackathons | Surf Blue       | Stadium Gold  | surf, canyon, cove, heritage | `sky`      | `cove`      |
+| Hackathons | Surf Blue       | Stadium Gold  | surf, canyon, cove, heritage | `sky`      | `poly`      |
 | Portfolio  | Dexter Green    | Morro Blue    | dexter, morro, surf, canyon  | `serenity` | `poly`      |
-| Resume     | Morro Cove      | Poly Canyon   | cove, canyon, morro          | `serenity` | `cove`      |
+| Resume     | Morro Cove      | Poly Canyon   | cove, canyon, morro          | `serenity` | `poly`      |
 | Contact    | Heritage Orange | Mission Beige | heritage, canyon, cove       | `mission`  | `poly`      |
 
 ## Motion

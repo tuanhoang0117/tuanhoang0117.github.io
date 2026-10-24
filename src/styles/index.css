@@ -57,9 +57,9 @@
   /* Category glyphs (square, circle, diamond, triangle, plus). Decorative: always beside the
      category's text label, so they don't need text contrast. */
   --color-glyph-blue: var(--color-cove);
-  --color-glyph-red: var(--color-heritage);
+  --color-glyph-red: var(--color-poly);
   --color-glyph-purple: var(--color-surf);
-  --color-glyph-orange: var(--color-gold);
+  --color-glyph-orange: var(--color-heritage);
 
   /* Type voices */
   --font-display: "Archivo Black", "Inter Variable", system-ui, sans-serif;
