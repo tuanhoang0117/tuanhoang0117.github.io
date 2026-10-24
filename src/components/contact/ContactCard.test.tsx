@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import { socials } from "../../content/site";
+import { contact, socials } from "../../content/site";
 import { ContactCard } from "./ContactCard";
 import { contactKind } from "./links";
 
@@ -43,6 +43,21 @@ describe("ContactCard", () => {
       const external = a.getAttribute("href")!.startsWith("http");
       expect(a.getAttribute("target")).toBe(external ? "_blank" : null);
       expect(a.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
+  it("renders the prompt and resume lead-in from site.contact", () => {
+    const original = { ...contact };
+    contact.prompt = "Test prompt from site.ts";
+    contact.resumeLead = "Test resume lead from site.ts";
+    try {
+      renderCard();
+      expect(screen.getByText("Test prompt from site.ts")).toBeInTheDocument();
+      expect(screen.getByText(/Test resume lead from site\.ts/)).toBeInTheDocument();
+      expect(screen.queryByText(original.prompt)).not.toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(original.resumeLead))).not.toBeInTheDocument();
+    } finally {
+      Object.assign(contact, original);
     }
   });
 

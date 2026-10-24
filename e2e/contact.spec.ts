@@ -1,14 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { site, socials } from "../src/content/site";
 
-// Expected values from src/content/site.ts, written out because the e2e tsconfig (nodenext) can't
-// import src/content without file extensions. If site.ts changes, update these too.
-const email = "tuanhoang0117@gmail.com";
-const socials = [
-  { label: "Email", href: `mailto:${email}` },
-  { label: "LinkedIn", href: "https://www.linkedin.com/in/tuanhoang0117/" },
-  { label: "GitHub", href: "https://github.com/tuanhoang0117" },
-];
+const email = site.email;
+// The card's order: Email, LinkedIn, GitHub. Values come from site.ts; only the order is fixed here.
+const order = ["mailto:", "https://www.linkedin.com/", "https://github.com/"];
+const expectedLinks = order.map((prefix) => {
+  const s = socials.find((x) => x.href.startsWith(prefix));
+  if (!s) throw new Error(`socials in site.ts has no link starting with ${prefix}`);
+  return s;
+});
 
 const card = (page: Page) => page.getByRole("main").locator("ul").getByRole("link");
 
@@ -22,7 +23,7 @@ test.describe("/contact", () => {
   }) => {
     const links = card(page);
     await expect(links).toHaveCount(socials.length);
-    for (const [i, s] of socials.entries()) {
+    for (const [i, s] of expectedLinks.entries()) {
       await expect(links.nth(i)).toHaveAccessibleName(new RegExp(`^${s.label}`));
       await expect(links.nth(i)).toHaveAttribute("href", s.href);
     }

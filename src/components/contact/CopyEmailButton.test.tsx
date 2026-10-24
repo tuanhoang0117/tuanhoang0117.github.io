@@ -51,6 +51,33 @@ describe("CopyEmailButton", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/couldn't copy/i);
   });
 
+  it("announces a second failed copy again, not just the first", async () => {
+    mockClipboard({ writeText: vi.fn().mockRejectedValue(new Error("denied")) });
+    render(<CopyEmailButton email={site.email} />);
+    const region = screen.getByRole("status");
+
+    // Screen readers speak a live region when nodes are added to it or its text changes.
+    // Record every addition that carries the failure message.
+    const announced: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const r of records) {
+        for (const node of r.addedNodes) {
+          if (/couldn't copy/i.test(node.textContent ?? "")) announced.push(node.textContent!);
+        }
+      }
+    });
+    observer.observe(region, { childList: true, subtree: true, characterData: true });
+
+    const button = screen.getByRole("button", { name: "Copy email" });
+    await click(button);
+    await click(button);
+    await act(async () => {}); // flush pending MutationObserver callbacks
+    observer.disconnect();
+
+    expect(announced).toHaveLength(2);
+    expect(region).toHaveTextContent(/couldn't copy/i);
+  });
+
   it("takes the same fallback when the Clipboard API is missing", async () => {
     mockClipboard(undefined);
     render(<CopyEmailButton email={site.email} />);

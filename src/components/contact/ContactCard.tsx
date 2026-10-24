@@ -1,14 +1,12 @@
 import { Link } from "react-router";
-import { site } from "../../content/site";
+import { contact, site } from "../../content/site";
 import { ContactIcon } from "./ContactIcon";
 import { CopyEmailButton } from "./CopyEmailButton";
 import { contactLinks, contactNav, resumeNav } from "./links";
 
-// UI chrome only. site.ts has no field for these yet; see the PR for issue #2.
+// UI mechanics only. Copy in Tuan's voice comes from src/content/site.ts.
 const copy = {
-  prompt: "Feel free to reach out.",
   divider: "or",
-  resumeLead: "Want the background first?",
   newTab: "(opens in a new tab)",
 };
 
@@ -19,7 +17,7 @@ export function ContactCard() {
         <h1 className="font-display text-outline text-5xl tracking-tight uppercase">
           {contactNav.label}
         </h1>
-        <p className="prompt mt-3 text-sm">{copy.prompt}</p>
+        <p className="prompt mt-3 text-sm">{contact.prompt}</p>
 
         <div className="mt-8">
           <CopyEmailButton email={site.email} />
@@ -54,7 +52,7 @@ export function ContactCard() {
       </div>
 
       <p className="mt-8 text-center text-sm">
-        {copy.resumeLead}{" "}
+        {contact.resumeLead}{" "}
         <Link
           to={resumeNav.href}
           className="font-semibold underline decoration-2 underline-offset-4 hover:text-poly"

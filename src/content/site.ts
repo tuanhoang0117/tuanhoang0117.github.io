@@ -11,6 +11,11 @@ export const site = {
     "Tuan Hoang — computer science student at Cal Poly SLO. Portfolio, resume, and projects in software engineering, AI, and full-stack development.",
 };
 
+export const contact = {
+  prompt: "Feel free to reach out.",
+  resumeLead: "Want the background first?",
+};
+
 export const socials: Link[] = [
   { label: "GitHub", href: "https://github.com/tuanhoang0117" },
   { label: "LinkedIn", href: "https://www.linkedin.com/in/tuanhoang0117/" },
