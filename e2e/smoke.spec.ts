@@ -12,6 +12,7 @@ const routes = [
   { path: "/lab/motion", h1: "Motion Lab" },
   { path: "/lab/banner", h1: "Banner Lab" },
   { path: "/lab/title", h1: "Title Lab" },
+  { path: "/lab/mascot", h1: "Mascot Lab" },
   { path: "/lab/physics", h1: "Physics Lab" },
   { path: "/portfolio/remind-app", h1: "Remind App" },
 ];
