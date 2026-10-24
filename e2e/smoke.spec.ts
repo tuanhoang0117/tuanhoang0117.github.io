@@ -9,6 +9,12 @@ const routes = [
   { path: "/resume", h1: "Resume" },
   { path: "/contact", h1: "Contact" },
   { path: "/lab", h1: "Pixel Lab" },
+  { path: "/lab/motion", h1: "Motion Lab" },
+  { path: "/lab/banner", h1: "Banner Lab" },
+  { path: "/lab/title", h1: "Title Lab" },
+  { path: "/lab/mascot", h1: "Mascot Lab" },
+  { path: "/lab/physics", h1: "Physics Lab" },
+  { path: "/portfolio/remind-app", h1: "Remind App" },
 ];
 
 for (const { path, h1 } of routes) {
@@ -39,6 +45,11 @@ for (const { path, h1 } of routes) {
 
 test("unknown routes show the 404 page", async ({ page }) => {
   await page.goto("/does-not-exist");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
+});
+
+test("unknown project slugs show the 404 page", async ({ page }) => {
+  await page.goto("/portfolio/does-not-exist");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
 });
 

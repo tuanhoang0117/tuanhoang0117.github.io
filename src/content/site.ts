@@ -11,6 +11,20 @@ export const site = {
     "Tuan Hoang — computer science student at Cal Poly SLO. Portfolio, resume, and projects in software engineering, AI, and full-stack development.",
 };
 
+export const school = {
+  name: "California Polytechnic State University, San Luis Obispo",
+  shortName: "Cal Poly SLO",
+};
+
+/** The ">>>" line under each page's title. */
+export const pagePrompts = {
+  hackathons: "Every weekend I spent building.",
+  portfolio: "Things I've built.",
+  resume: "Education, experience, and projects.",
+  lab: "Sprite test bench.",
+  notFound: "That page doesn't exist.",
+};
+
 export const contact = {
   prompt: "Feel free to reach out.",
   resumeLead: "Want the background first?",
