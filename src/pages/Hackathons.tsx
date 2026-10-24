@@ -1,6 +1,12 @@
+import { ArchiveGrid } from "../components/archive/ArchiveGrid";
 import { PageHeader } from "../components/ui/PageHeader";
+import { hackathons } from "../content/hackathons";
 
-// Stub. Built out by the "Hackathon archive" issue.
 export function Hackathons() {
-  return <PageHeader title="Hackathons" prompt="Every weekend I spent building." />;
+  return (
+    <>
+      <PageHeader title="Hackathons" prompt="Every weekend I spent building." />
+      <ArchiveGrid hackathons={hackathons} />
+    </>
+  );
 }
