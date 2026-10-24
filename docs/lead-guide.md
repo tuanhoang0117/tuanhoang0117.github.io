@@ -50,6 +50,8 @@ the issue or PR saying exactly where they stopped.
 - **Any other tool:** `scripts/dispatch.sh <role> <number>`, run by Tuan in a new terminal tab per
   agent. It creates the worktree, hides Tuan's credentials, and starts Codex with the role prompt.
   Agents report back on GitHub (PR or issue comments and checks), so the lead reads results there.
+  To start several at once in one tmux window, Tuan runs
+  `scripts/team.sh [--no-lead] reviewer:14 qa:16 ...` (the lead on the left, one pane per agent).
 
 Give every agent its own port (see the agent guide) and its own scratch folder. Never resume an
 agent that has stopped: its worktree may be gone. Start a new one.
@@ -86,6 +88,10 @@ one PR race for the same `agent/review` check.
   overwrote the other. Agents use `mktemp` files and per-agent scratch folders.
 - **Sprint 1:** A reviewer's deliberate break was silently refused, so its "failing" run tested
   unmodified code. Confirm a break landed (`git diff` or `cmp`) before trusting the result.
+- **Sprint 1:** Three Codex agents started at the same moment each fetched their PR into git's
+  shared `FETCH_HEAD`, so two of them checked out another PR's code. `dispatch.sh` now fetches
+  into a ref per agent and refuses to start unless the checkout matches the PR's head on GitHub.
+  Anything agents run in parallel needs its own file, ref, or port.
 - **Sprint 1:** A usage limit stopped a reviewer mid-review with no status posted. The required
   check kept the PR unmergeable, which is the gate working. Start a fresh reviewer; don't trust a
   partial one.

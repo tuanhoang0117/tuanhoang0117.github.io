@@ -50,8 +50,17 @@ else
     ports="E2E_PORT=$((4300 + n))"
     setup="Your worktree is $dir, detached at origin/v2 (already fetched). Create your branch with step 4 of your role definition and skip its fetch."
   else
-    git -C "$root" fetch -q origin "pull/$n/head"
-    git -C "$root" worktree add -q --detach "$dir" FETCH_HEAD
+    # Fetch into a ref of our own, not FETCH_HEAD: agents started together share FETCH_HEAD, and
+    # one would check out another's PR. Then confirm it is the PR's current head on GitHub.
+    ref="refs/dispatch/$role-$n"
+    git -C "$root" fetch -q origin "+pull/$n/head:$ref"
+    got="$(git -C "$root" rev-parse "$ref")"
+    want="$("$root/scripts/as-bot.sh" gh pr view "$n" --json headRefOid -q .headRefOid)"
+    if [ "$got" != "$want" ]; then
+      echo "dispatch: fetched $got for PR #$n, but GitHub says its head is $want. Not starting." >&2
+      exit 1
+    fi
+    git -C "$root" worktree add -q --detach "$dir" "$ref"
     tracker="PR #$n"
     if [ "$role" = qa ]; then
       ports="E2E_PORT=$((4400 + n)) and SCREENSHOT_PORT=$((4500 + n))"
@@ -86,4 +95,8 @@ command -v codex > /dev/null || {
   exit 1
 }
 cd "$dir"
-exec codex "$prompt"
+# Codex's error output goes to a log, so a crash at startup can't vanish with the screen.
+log="$dir/.agent-scratch/codex-stderr.log"
+mkdir -p "${log%/*}"
+echo "dispatch: starting Codex as $role${n:+ $n} in $dir (errors: $log)"
+exec codex "$prompt" 2>> "$log"

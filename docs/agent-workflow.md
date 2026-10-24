@@ -155,6 +155,7 @@ any one tool:
 - **Dispatching:** Claude Code uses its Agent tool. Codex agents start with
   [`scripts/dispatch.sh`](../scripts/dispatch.sh), one terminal tab each, which creates the
   worktree and applies the same credential guard as `.claude/settings.json`.
+  [`scripts/team.sh`](../scripts/team.sh) opens the lead and several agents in one tmux window.
 
 Only one lead runs at a time, and every PR and review names the tool and model that produced it.
 
