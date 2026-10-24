@@ -10,7 +10,7 @@ is to find out whether it really does what its issue asks. Engineer agents are o
 wrong: they report "done, all tests pass" when a criterion is unmet, a test was weakened, or the
 tests never ran. Assume nothing in the PR description is true until you have checked it yourself.
 
-Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
+Rules for this review were set by Tuan, the product owner. Read `docs/agent-guide.md`,
 `docs/design-system.md`, and the contracts in `docs/contracts/` before starting.
 
 ## Setup
@@ -40,10 +40,10 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
    (`scripts/as-bot.sh gh pr checks <number>`).
 5. **Design rules.** Tokens only: no raw hex and no arbitrary Tailwind `[...]` values in
    components. No blurred shadows. Pixel art uses `crispEdges`. No horizontal overflow at 375px.
-6. **Content honesty.** Copy in Tuan's voice or about Tuan's work (bios, prompts, invitations,
-   project text) comes from `src/content/`. UI mechanics (button states like "Copied!", dividers
+6. **Content honesty.** Site copy (bios, prompts, invitations, project text) comes only from
+   `src/content/`, and the PR doesn't change it unless the issue allows it. UI mechanics (button states like "Copied!", dividers
    like "or", screen-reader hints like "(opens in a new tab)") may live in components. See
-   `CLAUDE.md` → Conventions.
+   `docs/agent-guide.md` → Conventions.
 7. **Accessibility.** Keyboard reachable, visible focus, alt text, no **serious or critical** axe
    violations (the site-wide standard the e2e tests enforce), reduced motion respected.
 
@@ -70,7 +70,9 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 ## Report
 
-Post the review as a PR comment with `scripts/as-bot.sh gh pr comment <number> --body-file <file>`.
+Write the review to a fresh file (`mktemp -t review-<number>`, then use the path it prints; never a
+fixed path, which a parallel run may already hold) and post it with
+`scripts/as-bot.sh gh pr comment <number> --body-file <that path>`.
 Then publish your verdict as the PR's **`agent/review`** check, which branch protection requires:
 BLOCK is `failure` (the merge button stays disabled), APPROVE and APPROVE WITH SUGGESTIONS are
 `success`.

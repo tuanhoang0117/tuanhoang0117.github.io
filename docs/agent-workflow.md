@@ -35,7 +35,7 @@ Tuan ── screenshots + review ── Approve ── Merge  (GitHub blocks mer
 
 Several issues run this path at once. They stay out of each other's way because:
 
-- **File ownership.** Each issue lists the only files it may change (see `CLAUDE.md`).
+- **File ownership.** Each issue lists the only files it may change (see [agent-guide.md](agent-guide.md)).
 - **Contracts.** Shared types in `src/**/types.ts` are lead-owned, so agents build against a fixed
   interface.
 - **Pre-registered routes.** The lead adds every route before issues go out, so no agent edits
@@ -57,6 +57,14 @@ this repo only. This does three things:
 the token from macOS Keychain into that command's environment, so the token is never printed and
 never appears in a command line.
 
+Plain `gh` on this machine is logged in as Tuan, and plain `git push` uses his Keychain
+credential, so an agent that forgot the script would act under his name, and its status could look
+like a real override. [`.claude/settings.json`](../.claude/settings.json) prevents that for every
+Claude Code session and subagent in this repo: it points `gh` at an empty config directory and
+clears git's credential helper. Plain `gh` then says "gh auth login" and plain `git push` can't
+authenticate, while `as-bot.sh` brings its own token and works. This also applies to Tuan's own `!`
+commands inside Claude Code, so he runs owner commands (like overrides) from a normal terminal.
+
 ## Guardrails GitHub enforces
 
 On `v2`:
@@ -76,27 +84,59 @@ must update, and both agents check it again, because what they approved is no lo
 merge. It costs a few minutes of agent time per PR, and it catches two PRs that pass separately and
 break together. Tuan chose quality over speed here.
 
-### Overriding a BLOCK
+### Overriding a gate
 
-If Tuan disagrees with the reviewer, he posts `agent/review: success` himself, from his own
-account, with the reason in the description:
+Tuan can overrule either agent from his own account, in a normal terminal (not inside Claude Code,
+where his credentials are hidden). First get the PR's current head commit:
 
 ```bash
-gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> \
-  -f state=success -f context=agent/review -f description="Override by Tuan: <reason>"
+gh pr view <N> --json headRefOid -q .headRefOid
 ```
 
+Then post the status for that `<sha>`, with the reason in the description:
+
+```bash
+# Overrule a reviewer BLOCK
+gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> \
+  -f state=success -f context=agent/review -f description="Override by Tuan: <reason>"
+
+# Overrule a QA FAIL (for example, a flaky test he has checked himself)
+gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> \
+  -f state=success -f context=agent/qa -f description="Override by Tuan: <reason>"
+```
+
+**PRs no agent will run on** (an emergency fix, or the bot token has expired): post both
+statuses the same way, with a description saying why no agent ran, for example
+`"No agent run: bot token expired; Tuan tested locally"`.
+
+An override applies only to that `<sha>`. A new push resets both checks.
+
 GitHub records who posted every status, so the history shows the override and its reason. A human
-can always overrule an agent, and the overrule is never silent.
+can always overrule an agent, and the overrule is never silent. To see the whole history, including
+anything an override replaced:
 
-### Known limitation
+```bash
+gh api repos/tuanhoang0117/tuanhoang0117.github.io/commits/<sha>/statuses \
+  -q '.[] | [.created_at, .context, .state, .creator.login, .description] | @tsv'
+```
 
-Every agent role uses the same bot token, so GitHub can't tell QA, the reviewer, and an engineer
-apart. An engineer agent could technically post `agent/review: success` on its own PR. The
-engineer's instructions forbid it, but that's a rule, not enforcement. The checks reliably stop
-**honest mistakes** (like merging before the reviews exist), not a misbehaving agent. Tuan's
-required code-owner approval is the real backstop. The full fix is a separate identity per role (a
-GitHub App per agent), so the required checks can be pinned to the reviewer's identity alone.
+### Known limitations
+
+- **One bot token for every role.** The lead, engineers, QA, and the reviewer all act as
+  `tuanhoang-bot`, so GitHub can't tell them apart. An engineer could technically post
+  `agent/review: success` on its own PR, and so could the lead. The instructions forbid it, but
+  that's a rule, not enforcement.
+- **A later status silently replaces an earlier one.** GitHub's check shows only the newest status
+  per context. If the bot posts `success` after a reviewer's BLOCK, the merge button turns on and
+  the BLOCK survives only in the status history (command above) and the review comment.
+- **Pinning would end Tuan's override.** The full fix is a separate identity per role (a GitHub App
+  per agent), with each required check pinned to its app. Once pinned, a status Tuan posts from his
+  user account no longer satisfies the check, so overrides would need a new path, such as
+  temporarily lifting the requirement or a dedicated override app.
+
+The checks reliably stop **honest mistakes** (like merging before the reviews exist), not a
+misbehaving agent. Tuan's required code-owner approval, given after reading the review comments,
+is the real backstop.
 
 `main` (the live site) requires a PR and an approval. It gains the CI requirement at cutover.
 Until then `v2` is the repo's default branch, so `Closes #N` in a PR closes its issue on merge.
@@ -109,5 +149,5 @@ comment. The images stay out of the code history but still render on GitHub.
 
 ## Learning loop
 
-Every mistake that slips through becomes a rule in `CLAUDE.md` → "Lessons learned" at the sprint
+Every mistake that slips through becomes a rule in [agent-guide.md](agent-guide.md) → "Lessons learned" at the sprint
 retro, so the next sprint's agents start with it.

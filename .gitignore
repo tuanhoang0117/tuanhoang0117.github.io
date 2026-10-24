@@ -27,5 +27,8 @@ coverage
 # Private notes: never commit
 private/
 
+# Local Claude Code instructions; the shared agent rules are in docs/agent-guide.md
+CLAUDE.md
+
 # Agent worktrees (local, created by Claude Code)
 .claude/worktrees/

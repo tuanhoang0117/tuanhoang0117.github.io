@@ -15,7 +15,7 @@ independent reviewer agent, and human review.
 | [`docs/decisions/`](docs/decisions/)             | Architecture decision records: why each major choice was made           |
 | [`docs/design-system.md`](docs/design-system.md) | Tokens and visual rules every page follows                              |
 | [`docs/contracts/`](docs/contracts/)             | Shared specs that parallel agents build against                         |
-| [`CLAUDE.md`](CLAUDE.md)                         | Agent instructions, file ownership, definition of done, lessons learned |
+| [`docs/agent-guide.md`](docs/agent-guide.md)     | Agent instructions, file ownership, definition of done, lessons learned |
 | Issues and PRs                                   | Every change, its acceptance criteria, its tests, and its review        |
 
 ## Development
