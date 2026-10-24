@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Dedicated port, separate from `npm run preview` (4173), so tests never hit a stale build.
-const PORT = 4321;
+// Parallel agents each set their own E2E_PORT so their test servers don't collide.
+const PORT = Number(process.env.E2E_PORT ?? 4321);
 
 export default defineConfig({
   testDir: "./e2e",
