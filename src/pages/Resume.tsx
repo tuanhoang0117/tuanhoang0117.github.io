@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { StackCards } from "../components/stack/StackCards";
 import { PageHeader } from "../components/ui/PageHeader";
 import { resume } from "../content/resume";
 import type { ResumeEntry } from "../content/types";
@@ -51,14 +52,7 @@ export function Resume() {
           ))}
         </Section>
         <Section n="02" title="Skills">
-          <dl className="space-y-3">
-            {resume.skills.map((g) => (
-              <div key={g.label}>
-                <dt className="font-bold">{g.label}</dt>
-                <dd>{g.skills.join(", ")}</dd>
-              </div>
-            ))}
-          </dl>
+          <StackCards groups={resume.skills} />
         </Section>
         <Section n="03" title="Experience">
           {resume.experience.map((e) => (
