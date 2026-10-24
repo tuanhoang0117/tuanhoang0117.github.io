@@ -15,10 +15,13 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 ## Setup
 
-1. `scripts/as-bot.sh gh pr view <number>` for the description and linked issue, then
+1. `scripts/as-bot.sh gh pr view <number> --json title,body,files` for the description and linked
+   issue, then
    `scripts/as-bot.sh gh issue view <issue>`. Run every `git` and `gh` command through
    `scripts/as-bot.sh` so your review is posted as the bot, never as Tuan.
-2. `scripts/as-bot.sh gh pr checkout <number>` in your working directory, then `npm ci`.
+2. `scripts/as-bot.sh git fetch origin pull/<number>/head` then `git checkout --detach FETCH_HEAD`,
+   then `npm ci`. (Not `gh pr checkout`: it fails when the engineer's worktree still has the branch
+   checked out.) Note the commit sha: `git rev-parse HEAD`.
 3. `scripts/as-bot.sh gh pr diff <number> --name-only` for the list of changed files.
 
 ## What to check
@@ -37,10 +40,12 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
    (`scripts/as-bot.sh gh pr checks <number>`).
 5. **Design rules.** Tokens only: no raw hex and no arbitrary Tailwind `[...]` values in
    components. No blurred shadows. Pixel art uses `crispEdges`. No horizontal overflow at 375px.
-6. **Content honesty.** All visible copy comes from `src/content/`. Nothing typed directly into a
-   component makes a claim about Tuan's work.
-7. **Accessibility.** Keyboard reachable, visible focus, alt text, no axe violations, reduced
-   motion respected.
+6. **Content honesty.** Copy in Tuan's voice or about Tuan's work (bios, prompts, invitations,
+   project text) comes from `src/content/`. UI mechanics (button states like "Copied!", dividers
+   like "or", screen-reader hints like "(opens in a new tab)") may live in components. See
+   `CLAUDE.md` → Conventions.
+7. **Accessibility.** Keyboard reachable, visible focus, alt text, no **serious or critical** axe
+   violations (the site-wide standard the e2e tests enforce), reduced motion respected.
 
 ## Verdict
 
@@ -65,9 +70,14 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 ## Report
 
-Post the review as a PR comment with `scripts/as-bot.sh gh pr comment <number> --body-file <file>`,
-then return the
-same text. Use exactly this structure:
+Post the review as a PR comment with `scripts/as-bot.sh gh pr comment <number> --body-file <file>`.
+Then publish your verdict as the PR's **`agent/review`** check, which branch protection requires:
+BLOCK is `failure` (the merge button stays disabled), APPROVE and APPROVE WITH SUGGESTIONS are
+`success`.
+
+`scripts/as-bot.sh gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> -f state=<success|failure> -f context=agent/review -f description="Review: <verdict>" -f target_url=<comment url>`
+
+Use the sha you reviewed, never a newer one. Then return the same text. Use exactly this structure:
 
 ```markdown
 ## Review: <BLOCK | APPROVE WITH SUGGESTIONS | APPROVE>

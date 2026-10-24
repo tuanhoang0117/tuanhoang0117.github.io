@@ -21,11 +21,14 @@ Parallel agents run test servers at the same time, so each uses its own port:
 ## How work flows
 
 Issue → engineer agent (own worktree, opens a PR into `v2`) → QA agent and reviewer agent (post
-their reports on the PR) → Tuan approves and merges. GitHub blocks merging without green CI and
-Tuan's approval. Full description: [docs/agent-workflow.md](docs/agent-workflow.md).
+their reports on the PR and publish `agent/qa` and `agent/review` checks) → Tuan approves and
+merges. GitHub blocks merging until CI, both agent checks, and Tuan's approval all pass. `v2` is the
+default branch until cutover, so `Closes #N` closes issues when a PR merges. Full description:
+[docs/agent-workflow.md](docs/agent-workflow.md).
 
 **Every `git` and `gh` command that talks to GitHub goes through `scripts/as-bot.sh`**, so agent
-work is authored by `tuanhoang-bot`, never by Tuan's account. Never print the token.
+work is authored by `tuanhoang-bot`, never by Tuan's account. Never print the token. The bot's
+token has no `read:org` scope, so plain `gh pr view` errors: always pass `--json <fields>`.
 
 ## Stack
 
@@ -68,7 +71,10 @@ A PR is ready for review only when all of these are true:
 
 ## Conventions
 
-- Components render from `src/content/` data. No hard-coded project copy in JSX.
+- Copy in Tuan's voice or about his work (bios, prompts, invitations, project text) lives in
+  `src/content/`, never in JSX. UI mechanics may live in components: button states ("Copied!"),
+  dividers ("or"), and screen-reader hints ("(opens in a new tab)"). If a page needs voice copy
+  and `src/content/` has no field for it, stop and say so in the PR.
 - Tokens only: no raw hex, no arbitrary Tailwind `[...]` values in components.
 - Match surrounding code: named exports, function components, comments only where the code
   can't explain itself.
@@ -97,3 +103,17 @@ prevents it.
 - **Sprint 1 prep:** Reverting a deliberately broken file with `git checkout` restored the last
   _commit_ and wiped uncommitted work. When checking that a test can fail, back the file up and
   restore from the backup.
+- **Sprint 1 dry run:** Agent definitions load when a session starts, so a session that creates
+  them can't use them as agent types. Start a fresh session after adding or changing
+  `.claude/agents/`.
+- **Sprint 1 dry run:** A PR was approved and merged three minutes before QA and the reviewer
+  posted, and the reviewer then said BLOCK. A "wait for the reports" rule was skippable, so the
+  agents' verdicts are now required checks (`agent/qa`, `agent/review`) that disable the merge
+  button.
+- **Sprint 1 dry run:** `Closes #N` only closes issues for merges into the default branch, so
+  issue #2 stayed open. `v2` is now the default branch until cutover.
+- **Sprint 1 dry run:** `gh pr checkout` failed because the engineer's worktree still had the
+  branch checked out. QA and the reviewer now fetch `pull/<N>/head` and check it out detached.
+- **Sprint 1 dry run:** Claude Code's worktree guard blocked `scripts/as-bot.sh git ...` for agents
+  until Tuan allowed the script in his user settings. The engineer stopped instead of working
+  around it, which is the behavior we want.

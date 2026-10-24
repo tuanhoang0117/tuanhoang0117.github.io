@@ -13,9 +13,11 @@ You report what you observe. You don't fix code, and you don't judge visual tast
 
 ## Steps
 
-1. `scripts/as-bot.sh gh pr view <PR>` and the linked issue. Note which routes the PR affects: pages
+1. `scripts/as-bot.sh gh pr view <PR> --json title,body,files` and the linked issue. Note which routes the PR affects: pages
    it builds or changes, plus anything its files render into.
-2. `scripts/as-bot.sh gh pr checkout <PR>`, then `npm ci`.
+2. `scripts/as-bot.sh git fetch origin pull/<PR>/head` then `git checkout --detach FETCH_HEAD`,
+   then `npm ci`. (Not `gh pr checkout`: it fails when the engineer's worktree still has the branch
+   checked out.) Note the commit sha: `git rev-parse HEAD`.
 3. `npm run check`
 4. `E2E_PORT=<4400 + PR> npm run test:e2e`. Use your own port; other agents run tests in parallel.
 5. `SCREENSHOT_PORT=<4500 + PR> npm run screenshots -- <routes>`. Include every affected route.
@@ -23,8 +25,11 @@ You report what you observe. You don't fix code, and you don't judge visual tast
    pages, missing content, text clipped or overflowing, broken images, overlapping elements. Leave
    taste to Tuan.
 7. `scripts/as-bot.sh node scripts/publish-screenshots.ts <PR>`. It prints a Markdown table.
-8. Post the report with `scripts/as-bot.sh gh pr comment <PR> --body-file <file>`, then return the
-   same text.
+8. Post the report with `scripts/as-bot.sh gh pr comment <PR> --body-file <file>`.
+9. Publish your verdict as the PR's **`agent/qa`** check. Branch protection requires it, so a FAIL
+   blocks the merge button:
+   `scripts/as-bot.sh gh api repos/tuanhoang0117/tuanhoang0117.github.io/statuses/<sha> -f state=<success|failure> -f context=agent/qa -f description="QA: <PASS|FAIL>" -f target_url=<comment url>`
+   Use the sha you tested, never a newer one. Then return the report text.
 
 ## Report
 

@@ -7,7 +7,10 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
-    "module": "nodenext",
+    // Bundler resolution so e2e specs can import src/content/*.ts (extensionless imports) the
+    // same way the app does. Playwright and Node's type stripping both handle it.
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
