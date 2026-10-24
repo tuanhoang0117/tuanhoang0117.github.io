@@ -45,7 +45,10 @@ export interface Hackathon {
    */
   role: string;
   stack: string[];
-  /** Award text, e.g. "Winner, Best Beginner Project". Absent if the project didn't place. */
+  /**
+   * Award text for a win, e.g. "Winner, Best Beginner Project". Wins only: an event that didn't
+   * win has no placement, so the WINNER sticker shows only on wins (Tuan, PR #14).
+   */
   placement?: string;
   /** Headline numbers for the detail page stats bar. Filled in as they're confirmed. */
   stats?: {
@@ -82,3 +85,10 @@ export interface Resume {
   experience: ResumeEntry[];
   projects: ResumeEntry[];
 }
+
+/**
+ * What the home page mascot renders. A procedural placeholder until the approved mustang art
+ * arrives; switching to the image is a change to `src/content/mascot.ts` only.
+ */
+export type MascotVisualSource =
+  { kind: "procedural-placeholder" } | { kind: "image"; idleSrc: string; activeSrc?: string };
