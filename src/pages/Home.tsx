@@ -6,7 +6,7 @@ import { site } from "../content/site";
 export function Home() {
   return (
     <>
-      <PageHeader title={site.name} prompt="Computer science student at Cal Poly SLO." />
+      <PageHeader title={site.name} prompt={site.tagline} />
       <section className="mx-auto grid max-w-6xl gap-8 px-4 pb-20 sm:grid-cols-[auto_1fr] sm:px-8">
         <img
           src="/profile.jpg"
