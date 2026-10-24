@@ -30,15 +30,53 @@ value or arbitrary `[...]` value in a component is a review blocker.
 
 ## Color
 
-| Token                              | Use                                                               |
-| ---------------------------------- | ----------------------------------------------------------------- |
-| `paper`, `paper-deep`              | Page and footer backgrounds                                       |
-| `card`                             | Card surfaces                                                     |
-| `ink`, `ink-muted`, `ink-faint`    | Text, borders, shadows. `ink-faint` is never body text (contrast) |
-| `poly`, `poly-bright`              | Primary brand, section labels, prompt arrows                      |
-| `gold`, `gold-bright`              | Primary buttons, focus ring, highlights                           |
-| `tint-peach/butter/mint/sky/lilac` | Archive columns, card washes (one per hackathon)                  |
-| `glyph-red/blue/orange/purple`     | Category glyphs only                                              |
+The palette is Cal Poly SLO's brand palette. Tokens are named as in the brand guide and live in
+[`src/styles/index.css`](../src/styles/index.css). Poly Green and Mustang Gold are the brand;
+each page adds an accent pair (see Page themes).
+
+| Group  | Tokens (hex)                                                                                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brand  | `poly` Poly Green #154734, `gold` Mustang Gold #BD8B13                                                                                                                                                                  |
+| Bright | `poly-bright` Farmers' Market #3A913F, `dexter` #A4D65E, `canyon` Poly Canyon #F2C75C, `stadium` Stadium Gold #F8E08E, `surf` Surf Blue #5CB8B2, `sky` Sky Blue #B5E3D8, `morro` Morro Blue #ABCAE9, `serenity` #D5E4F4 |
+| Muted  | `pismo` Pismo Sand #CAC7A7, `mission` Mission Beige #E4E3D3, `sage` Coast Sage #B7CDC2, `sycamore` #789F90, `seal` Seal Gray #54585A, `kennedy` Kennedy Gray #8E9089                                                    |
+| Accent | `avocado` #D0DF00, `heritage` Heritage Orange #FF6A39, `cove` Morro Cove #0067B9                                                                                                                                        |
+
+Surfaces and ink stay neutral so the colors read as color: `paper` (page), `paper-deep` (footer,
+Mission Beige), `card` (white), `ink`, `ink-muted`, `ink-faint` (never body text).
+
+**Which colors can be text.** On paper or a white card, only `poly` (10:1), `cove` (5.8:1), and
+`seal` (7:1) pass WCAG AA for text. Every other palette color is a **fill**: backgrounds, washes,
+shadows, borders, glyphs. Ink text on any light fill passes (10:1 or better).
+`src/styles/themes.test.ts` checks these ratios.
+
+**Older token names** still work and now point at Cal Poly colors: `gold-bright` → Poly Canyon
+(buttons, stickers, selection); `tint-peach/butter/mint/sky/lilac` → Mission, Stadium, Sky, Sky, Serenity
+(archive columns). Every tint is light enough for `ink-muted` labels; no Cal Poly green is, so
+`mint` shares Sky Blue; `glyph-blue/red/purple/orange` → Cove, Heritage, Surf, Gold. Glyphs
+are decorative: they always sit beside their category's text label.
+
+**Focus ring:** 3px `cove` (5.4:1 against paper; WCAG 1.4.11 needs 3:1).
+
+### Block shadows
+
+Hard, unblurred, offset down and right. Sizes: `shadow-block-sm` (3px), `shadow-block` (6px),
+`shadow-block-lg` (10px), `shadow-block-xl` (14px). They're ink by default; add any palette color
+utility to make an accent shadow: `shadow-block-lg shadow-cove`. On hover, step up one size.
+Cards on a page cycle through their page theme's shadow colors (`cardShadow()` in
+[`src/styles/themes.ts`](../src/styles/themes.ts)).
+
+### Page themes
+
+Defined in [`src/styles/themes.ts`](../src/styles/themes.ts), so pages import them instead of
+picking colors ad hoc.
+
+| Page       | Primary         | Secondary     | Card shadows                 | Wash       | Accent text |
+| ---------- | --------------- | ------------- | ---------------------------- | ---------- | ----------- |
+| Home       | Poly Green      | Mustang Gold  | poly, gold, poly-bright      | `stadium`  | `poly`      |
+| Hackathons | Surf Blue       | Stadium Gold  | surf, canyon, cove, heritage | `sky`      | `cove`      |
+| Portfolio  | Dexter Green    | Morro Blue    | dexter, morro, surf, canyon  | `serenity` | `poly`      |
+| Resume     | Morro Cove      | Poly Canyon   | cove, canyon, morro          | `serenity` | `cove`      |
+| Contact    | Heritage Orange | Mission Beige | heritage, canyon, cove       | `mission`  | `poly`      |
 
 ## Motion
 

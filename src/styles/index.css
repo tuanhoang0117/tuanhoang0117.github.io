@@ -13,7 +13,7 @@
 @theme {
   /* Surfaces */
   --color-paper: #fbf8f1;
-  --color-paper-deep: #f3eee2;
+  --color-paper-deep: #e4e3d3; /* Mission Beige */
   --color-card: #ffffff;
 
   /* Ink */
@@ -21,24 +21,45 @@
   --color-ink-muted: #5b5b57;
   --color-ink-faint: #8a8a84;
 
-  /* Brand: Cal Poly-inspired green and gold */
-  --color-poly: #154734;
-  --color-poly-bright: #3a913f;
-  --color-gold: #bd8b13;
-  --color-gold-bright: #f2c230;
+  /* Cal Poly SLO brand palette, named as in the brand guide. Only poly, cove, and seal are dark
+     enough for text on light surfaces; the rest are fills (see docs/design-system.md → Color). */
+  --color-poly: #154734; /* Poly Green */
+  --color-gold: #bd8b13; /* Mustang Gold */
+  --color-poly-bright: #3a913f; /* Farmers' Market */
+  --color-dexter: #a4d65e;
+  --color-canyon: #f2c75c;
+  --color-stadium: #f8e08e;
+  --color-surf: #5cb8b2;
+  --color-sky: #b5e3d8;
+  --color-morro: #abcae9;
+  --color-serenity: #d5e4f4;
+  --color-pismo: #cac7a7;
+  --color-mission: #e4e3d3;
+  --color-sage: #b7cdc2;
+  --color-sycamore: #789f90;
+  --color-seal: #54585a;
+  --color-kennedy: #8e9089;
+  --color-avocado: #d0df00;
+  --color-heritage: #ff6a39;
+  --color-cove: #0067b9; /* Morro Cove */
 
-  /* Pastel tints for archive columns and section washes */
-  --color-tint-peach: #fbe3d0;
-  --color-tint-butter: #fbefc0;
-  --color-tint-mint: #e3f0da;
-  --color-tint-sky: #dcebf7;
-  --color-tint-lilac: #ece3f7;
+  /* Primary buttons, stickers, selection */
+  --color-gold-bright: var(--color-canyon);
 
-  /* Category glyph colors (game-UI style icons: square, triangle, diamond, circle, plus) */
-  --color-glyph-red: #d94848;
-  --color-glyph-blue: #2f6fdb;
-  --color-glyph-orange: #e9762b;
-  --color-glyph-purple: #8b5cf6;
+  /* Washes for archive columns (one per hackathon). Names are the content contract's Tint values. */
+  --color-tint-peach: var(--color-mission);
+  --color-tint-butter: var(--color-stadium);
+  /* No Cal Poly green is light enough for ink-muted labels (Sage 4.1:1), so mint shares Sky. */
+  --color-tint-mint: var(--color-sky);
+  --color-tint-sky: var(--color-sky);
+  --color-tint-lilac: var(--color-serenity);
+
+  /* Category glyphs (square, circle, diamond, triangle, plus). Decorative: always beside the
+     category's text label, so they don't need text contrast. */
+  --color-glyph-blue: var(--color-cove);
+  --color-glyph-red: var(--color-heritage);
+  --color-glyph-purple: var(--color-surf);
+  --color-glyph-orange: var(--color-gold);
 
   /* Type voices */
   --font-display: "Archivo Black", "Inter Variable", system-ui, sans-serif;
@@ -51,10 +72,12 @@
   --text-display: clamp(2.5rem, 10.5vw, 6rem);
   --text-display--line-height: 0.9;
 
-  /* Hard, blur-free block shadows. Never use blurred shadows. */
+  /* Hard, blur-free block shadows. Never use blurred shadows. Default color is ink; add a color
+     utility (shadow-cove, shadow-dexter, ...) for an accent shadow. */
   --shadow-block-sm: 3px 3px 0 0 var(--color-ink);
   --shadow-block: 6px 6px 0 0 var(--color-ink);
   --shadow-block-lg: 10px 10px 0 0 var(--color-ink);
+  --shadow-block-xl: 14px 14px 0 0 var(--color-ink);
 
   /* Sharp by default; small radii only */
   --radius-chip: 2px;
@@ -129,8 +152,10 @@
     min-height: 100dvh;
   }
 
+  /* Morro Cove: 5.4:1 against paper. The old gold ring was about 1.6:1, under the 3:1 a focus
+     indicator needs. */
   :focus-visible {
-    outline: 3px solid var(--color-gold-bright);
+    outline: 3px solid var(--color-cove);
     outline-offset: 2px;
   }
 
