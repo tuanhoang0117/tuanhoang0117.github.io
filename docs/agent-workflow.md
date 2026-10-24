@@ -142,6 +142,22 @@ is the real backstop.
 Until then `v2` is the repo's default branch, so `Closes #N` in a PR closes its issue on merge.
 GitHub Pages still publishes from `main`.
 
+## Switching tools
+
+The team can run on Claude Code or OpenAI Codex, and a sprint can move between them mid-way, for
+example when one tool hits its usage limit. Everything a session needs to continue lives outside
+any one tool:
+
+- **Rules:** [`AGENTS.md`](../AGENTS.md) (read by Codex and other tools) and the local CLAUDE.md
+  (Claude Code) both point to the [agent guide](agent-guide.md) and [lead guide](lead-guide.md).
+- **State:** GitHub is the source of truth. The lead also keeps a local handoff note
+  (`private/handoff.md`) with what's in flight and what's waiting on Tuan.
+- **Dispatching:** Claude Code uses its Agent tool. Codex agents start with
+  [`scripts/dispatch.sh`](../scripts/dispatch.sh), one terminal tab each, which creates the
+  worktree and applies the same credential guard as `.claude/settings.json`.
+
+Only one lead runs at a time, and every PR and review names the tool and model that produced it.
+
 ## Screenshots
 
 QA screenshots go to a separate `screenshots` branch (`pr-<number>/`) and are shown in the PR
