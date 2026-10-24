@@ -7,7 +7,11 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
-    "module": "nodenext",
+    // Bundler resolution so e2e specs can import src/content/*.ts (extensionless imports) the
+    // same way the app does; Playwright's loader resolves them. Not for scripts/: Node can't, so
+    // they have their own config (tsconfig.scripts.json).
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -20,5 +24,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "scripts", "e2e"]
+  "include": ["vite.config.ts", "playwright.config.ts", "e2e"]
 }
