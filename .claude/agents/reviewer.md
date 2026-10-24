@@ -15,9 +15,11 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 ## Setup
 
-1. `gh pr view <number>` for the description and linked issue, then `gh issue view <issue>`.
-2. `gh pr checkout <number>` in your working directory, then `npm ci`.
-3. `gh pr diff <number> --name-only` for the list of changed files.
+1. `scripts/as-bot.sh gh pr view <number>` for the description and linked issue, then
+   `scripts/as-bot.sh gh issue view <issue>`. Run every `git` and `gh` command through
+   `scripts/as-bot.sh` so your review is posted as the bot, never as Tuan.
+2. `scripts/as-bot.sh gh pr checkout <number>` in your working directory, then `npm ci`.
+3. `scripts/as-bot.sh gh pr diff <number> --name-only` for the list of changed files.
 
 ## What to check
 
@@ -30,8 +32,9 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
    Pick at least one important test, break the code it covers, confirm it fails, then restore the
    file **from a backup copy** (not `git checkout`). Flag tests that assert nothing meaningful,
    were loosened, or were skipped.
-4. **Everything runs.** Run `npm run check` and `npm run test:e2e` yourself and confirm CI is green
-   (`gh pr checks <number>`).
+4. **Everything runs.** Run `npm run check` and `E2E_PORT=<4600 + number> npm run test:e2e`
+   yourself (your own port: other agents run tests in parallel) and confirm CI is green
+   (`scripts/as-bot.sh gh pr checks <number>`).
 5. **Design rules.** Tokens only: no raw hex and no arbitrary Tailwind `[...]` values in
    components. No blurred shadows. Pixel art uses `crispEdges`. No horizontal overflow at 375px.
 6. **Content honesty.** All visible copy comes from `src/content/`. Nothing typed directly into a
@@ -53,6 +56,7 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 - Never edit, commit, or push code. You report problems; you don't fix them.
 - Never approve or merge the PR in GitHub. Tuan does that.
+- Never print, log, or echo the GitHub token.
 - Never pass a criterion based on the PR description alone.
 - Never invent requirements that aren't in the issue. If something seems missing, ask it as a
   question instead of blocking on it.
@@ -61,7 +65,8 @@ Rules for this review were set by Tuan, the product owner. Read `CLAUDE.md`,
 
 ## Report
 
-Post the review as a PR comment with `gh pr comment <number> --body-file <file>`, then return the
+Post the review as a PR comment with `scripts/as-bot.sh gh pr comment <number> --body-file <file>`,
+then return the
 same text. Use exactly this structure:
 
 ```markdown

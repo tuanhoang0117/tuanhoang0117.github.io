@@ -10,7 +10,22 @@ npm run dev        # dev server
 npm run check      # lint + format check + typecheck + unit tests (run before every commit)
 npm run test:e2e   # Playwright + axe against a fresh production build (desktop + mobile)
 npm run format     # auto-format
+npm run screenshots -- /route ...   # desktop + 375px PNGs into screenshots/
+scripts/as-bot.sh <git|gh ...>      # run a GitHub command as tuanhoang-bot
 ```
+
+Parallel agents run test servers at the same time, so each uses its own port:
+`E2E_PORT=<4300 + issue>` for engineers, `<4400 + PR>` for QA, `<4600 + PR>` for the reviewer, and
+`SCREENSHOT_PORT=<4500 + PR>` for QA screenshots.
+
+## How work flows
+
+Issue → engineer agent (own worktree, opens a PR into `v2`) → QA agent and reviewer agent (post
+their reports on the PR) → Tuan approves and merges. GitHub blocks merging without green CI and
+Tuan's approval. Full description: [docs/agent-workflow.md](docs/agent-workflow.md).
+
+**Every `git` and `gh` command that talks to GitHub goes through `scripts/as-bot.sh`**, so agent
+work is authored by `tuanhoang-bot`, never by Tuan's account. Never print the token.
 
 ## Stack
 
@@ -46,7 +61,8 @@ A PR is ready for review only when all of these are true:
 2. `npm run check` and `npm run test:e2e` pass locally, and CI is green.
 3. New behavior has tests, and **each new test was seen failing** before the fix or against a
    deliberately broken version. A test that can't fail proves nothing.
-4. Screenshots at desktop and 375px mobile are attached for any visual change.
+4. Screenshots at desktop and 375px mobile are attached for any visual change (the QA agent does
+   this).
 5. No files outside your ownership list changed.
 6. The PR body states the agent role and model that built it and links the issue.
 
@@ -57,7 +73,9 @@ A PR is ready for review only when all of these are true:
 - Match surrounding code: named exports, function components, comments only where the code
   can't explain itself.
 - Commit messages: imperative subject under 72 characters, body explains why.
-- Never push to `main`. All work merges into `v2` through a reviewed PR.
+- Never push to `v2` or `main`. Branch protection rejects it anyway. All work merges into `v2`
+  through a PR that Tuan approves.
+- Stage explicit paths (`git add <files>`), never `git add -A` or `git add .`.
 
 ## Lessons learned
 

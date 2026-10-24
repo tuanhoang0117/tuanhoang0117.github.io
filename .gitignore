@@ -9,6 +9,7 @@ dist
 *.local
 
 # Test output
+screenshots
 test-results
 playwright-report
 coverage
