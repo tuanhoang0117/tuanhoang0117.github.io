@@ -65,7 +65,8 @@ fi
 
 prompt="You are the $role for Tuan Hoang's portfolio${n:+, working on $tracker}, running in OpenAI Codex.
 
-Read AGENTS.md first and follow it. $setup
+Read $root/AGENTS.md first and follow it. Your worktree may predate it, so read any doc it names
+from your worktree if it's there, otherwise from $root. $setup
 
 Before anything else, prove the credential guard: run \`gh api user -q .login\`, which must fail,
 then \`scripts/as-bot.sh gh api user -q .login\`, which must print tuanhoang-bot. If the first
