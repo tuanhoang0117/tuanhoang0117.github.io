@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { StackCards } from "../components/stack/StackCards";
 import { PageHeader } from "../components/ui/PageHeader";
 import { resume } from "../content/resume";
+import { pagePrompts } from "../content/site";
 import type { ResumeEntry } from "../content/types";
 
 function Entry({ entry }: { entry: ResumeEntry }) {
@@ -36,7 +37,7 @@ function Section({ n, title, children }: { n: string; title: string; children: R
 export function Resume() {
   return (
     <>
-      <PageHeader title="Resume" prompt="Education, experience, and projects.">
+      <PageHeader title="Resume" prompt={pagePrompts.resume}>
         <a
           href={resume.pdf}
           download="TuanHoang_Resume.pdf"

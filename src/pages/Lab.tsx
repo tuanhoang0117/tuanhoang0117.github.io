@@ -1,4 +1,5 @@
 import { PageHeader } from "../components/ui/PageHeader";
+import { pagePrompts } from "../content/site";
 import { toRuns } from "../pixel/runs";
 import { Sprite } from "../pixel/Sprite";
 import { sprites } from "../pixel/sprites";
@@ -74,7 +75,7 @@ function SpriteEntry({ sprite }: { sprite: SpriteDef }) {
 export function Lab() {
   return (
     <>
-      <PageHeader title="Pixel Lab" prompt="Sprite test bench." />
+      <PageHeader title="Pixel Lab" prompt={pagePrompts.lab} />
       <ul className="mx-auto max-w-6xl space-y-8 px-4 pb-16 sm:px-8">
         {sprites.map((sprite) => (
           <SpriteEntry key={sprite.name} sprite={sprite} />

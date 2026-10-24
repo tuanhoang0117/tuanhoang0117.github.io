@@ -1,6 +1,7 @@
 import { PageHeader } from "../components/ui/PageHeader";
 import { hackathons } from "../content/hackathons";
 import { projects } from "../content/projects";
+import { pagePrompts } from "../content/site";
 import type { Link, Tint } from "../content/types";
 
 const tintBg: Record<Tint, string> = {
@@ -46,7 +47,7 @@ function Stack({ items }: { items: string[] }) {
 export function Portfolio() {
   return (
     <>
-      <PageHeader title="Portfolio" prompt="Things I've built." />
+      <PageHeader title="Portfolio" prompt={pagePrompts.portfolio} />
 
       <section aria-labelledby="hackathons" className="mx-auto max-w-6xl px-4 pb-16 sm:px-8">
         <h2 id="hackathons" className="label-mono mb-6 text-poly">
