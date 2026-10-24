@@ -23,12 +23,14 @@ interface CopyEmailButtonProps {
 
 export function CopyEmailButton({ email }: CopyEmailButtonProps) {
   const [status, setStatus] = useState<Status>("idle");
+  const [attempt, setAttempt] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   async function copy() {
     clearTimeout(timer.current);
+    setAttempt((n) => n + 1);
     try {
       // Missing in insecure contexts and some browsers; treat that the same as a rejection.
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
@@ -50,7 +52,9 @@ export function CopyEmailButton({ email }: CopyEmailButtonProps) {
         {labels[status]}
       </button>
       <p role="status" aria-live="polite" className="sr-only">
-        {announcements[status]}
+        {/* Keyed per attempt so a repeated message is a new node, which screen readers announce
+            again. Setting the same text twice changes nothing in the DOM and stays silent. */}
+        {status !== "idle" && <span key={attempt}>{announcements[status]}</span>}
       </p>
       {status === "failed" && (
         <p className="mt-3 border-2 border-dashed border-ink bg-paper px-3 py-2 text-center font-mono text-sm break-all select-all">
