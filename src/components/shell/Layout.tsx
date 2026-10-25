@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
+import { PageTransition } from "../motion/PageTransition";
 import { Footer } from "./Footer";
 import { Nav } from "./Nav";
 
@@ -21,7 +22,9 @@ export function Layout() {
       </a>
       <Nav />
       <main id="main" className="flex-1">
-        <Outlet />
+        <PageTransition>
+          <Outlet />
+        </PageTransition>
       </main>
       <Footer />
     </div>
