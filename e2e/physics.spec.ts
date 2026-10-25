@@ -175,6 +175,17 @@ test.describe("/lab/physics", () => {
       { width: height - 200, height: width }, // rotate
     ]) {
       await page.setViewportSize(next);
+      await expect
+        .poll(() =>
+          overlay(page).evaluate((el, { width, height }) => {
+            const canvas = el as HTMLCanvasElement;
+            return (
+              canvas.width === Math.round(width * devicePixelRatio) &&
+              canvas.height === Math.round(height * devicePixelRatio)
+            );
+          }, next),
+        )
+        .toBe(true);
       await expect(overlay(page)).toHaveAttribute("data-resting", "true", {
         timeout: REST_TIMEOUT,
       });
