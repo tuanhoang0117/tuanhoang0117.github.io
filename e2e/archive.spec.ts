@@ -21,6 +21,47 @@ async function columnCount(page: Page): Promise<number> {
   return new Set(lefts).size;
 }
 
+/** Records every Web Animations call on the page: the element's article name or tag, and delay. */
+async function recordEntrances(page: Page) {
+  await page.addInitScript(() => {
+    const log: { target: string; delay: number }[] = [];
+    (window as unknown as { entranceLog: typeof log }).entranceLog = log;
+    const original = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      const timing = typeof options === "object" ? options : {};
+      log.push({
+        target: this.matches("article") ? this.querySelector("h2")!.textContent! : this.tagName,
+        delay: Number(timing.delay ?? 0),
+      });
+      return original.call(this, keyframes, options);
+    };
+  });
+}
+
+const entranceLog = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { entranceLog: { target: string; delay: number }[] }).entranceLog,
+  );
+
+/**
+ * Waits until the card entrances have finished, so layout is measured where the cards rest, not
+ * mid-rise. Ignores endless loops (the banner scrolls forever).
+ */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
 async function overflow(page: Page): Promise<number> {
   return page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -72,11 +113,59 @@ test.describe("/hackathons", () => {
     expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
+  test("fills the row at 1280px: every column sits in one row, none orphaned below", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(columns(page)).toHaveCount(expected.length);
+    await settleEntrances(page);
+    const tops = await columns(page).evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+  });
+
+  test("columns carry accent block shadows, each a different color", async ({ page }) => {
+    const shadows = await columns(page).evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).boxShadow),
+    );
+    for (const s of shadows) expect(s).not.toBe("none");
+    expect(new Set(shadows).size).toBe(expected.length);
+  });
+
+  test("columns enter one after another on load, newest first", async ({ page }) => {
+    await recordEntrances(page);
+    await page.goto("/hackathons");
+    await expect(columns(page)).toHaveCount(expected.length);
+    // Every column is a direct child of one Stagger list.
+    expect(await page.locator("main [data-stagger] > article").count()).toBe(expected.length);
+    const log = await entranceLog(page);
+    expect(log.map((a) => a.target)).toEqual(expected.map((h) => h.project));
+    expect(log[0]!.delay).toBe(0);
+    for (const [i, a] of log.slice(1).entries()) {
+      expect(a.delay - log[i]!.delay).toBeGreaterThanOrEqual(40);
+      expect(a.delay - log[i]!.delay).toBeLessThanOrEqual(80);
+    }
+  });
+
+  test("under reduced motion, columns appear in place with no entrance", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await recordEntrances(page);
+    await page.goto("/hackathons");
+    await expect(columns(page)).toHaveCount(expected.length);
+    expect(await entranceLog(page)).toEqual([]);
+    for (const column of await columns(page).all()) {
+      await expect(column).toBeVisible();
+      await expect(column).toHaveCSS("transform", "none");
+      await expect(column).toHaveCSS("clip-path", "none");
+    }
+  });
+
   // 375px is the width docs/design-system.md promises; 800px is a tablet; 1280px is desktop.
   for (const { width, cols } of [
     { width: 375, cols: 1 },
     { width: 800, cols: 2 },
-    { width: 1280, cols: 3 },
+    { width: 1280, cols: 4 },
   ]) {
     test(`lays out ${cols} column(s) at ${width}px with no horizontal overflow`, async ({
       page,
