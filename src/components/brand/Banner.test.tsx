@@ -90,11 +90,12 @@ function stubBrowser() {
   HTMLElement.prototype.animate = animate as unknown as HTMLElement["animate"];
 }
 
-const strip = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-testid="school-banner"]')!;
-const copiesOf = (c: HTMLElement) => c.querySelectorAll("[data-banner-copy]");
+const strip = (_c: HTMLElement) =>
+  document.body.querySelector<HTMLElement>('[data-testid="school-banner"]')!;
+const copiesOf = (_c: HTMLElement) => document.body.querySelectorAll("[data-banner-copy]");
 /** Text nodes with the school name that a screen reader would reach (not under aria-hidden). */
-const heard = (c: HTMLElement) =>
-  Array.from(c.querySelectorAll("span")).filter(
+const heard = (_c: HTMLElement) =>
+  Array.from(document.body.querySelectorAll("span")).filter(
     (el) => el.textContent === school.name && !el.closest('[aria-hidden="true"]'),
   );
 
@@ -111,6 +112,17 @@ afterEach(() => {
 });
 
 describe("Banner", () => {
+  it("renders outside transformed ancestors so fixed positioning remains viewport-pinned", () => {
+    render(
+      <div style={{ transform: "translateY(8px)", filter: "blur(0)" }}>
+        <Banner />
+      </div>,
+    );
+    expect(document.querySelector('[data-testid="school-banner"]')?.parentElement).toBe(
+      document.body,
+    );
+  });
+
   it("renders the school name from content", () => {
     const { container } = render(<Banner />);
     expect(copiesOf(container)[0]).toHaveTextContent(school.name);

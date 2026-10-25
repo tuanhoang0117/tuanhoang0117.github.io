@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { STAGGER_STEP_MS } from "../motion/motion";
 import type { Hackathon } from "../../content/types";
+import { pageThemes } from "../../styles/themes";
 import { ArchiveColumn } from "./ArchiveColumn";
 import { ArchiveGrid } from "./ArchiveGrid";
 
@@ -47,6 +49,14 @@ describe("ArchiveColumn", () => {
     expect(within(column).queryByTestId("image-placeholder")).toBeNull();
     expect(within(column).getByTestId("winner-sticker")).toHaveTextContent(/^Winner/);
     expect(within(column).getByText("01 ACE")).toBeInTheDocument();
+  });
+
+  it("takes its shadow color from the Hackathons theme, cycling by position", () => {
+    const shadows = pageThemes.hackathons.shadows;
+    renderColumn(full, 0);
+    expect(screen.getByRole("article")).toHaveClass("shadow-block-lg", shadows[0]);
+    renderColumn({ ...full, slug: "b", project: "B" }, shadows.length + 1);
+    expect(screen.getByRole("article", { name: "B" })).toHaveClass(shadows[1]);
   });
 
   it("links to the event's detail page", () => {
@@ -115,5 +125,34 @@ describe("ArchiveGrid", () => {
       "02 OLD",
       "03 UNDATED",
     ]);
+  });
+
+  describe("entrance", () => {
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+
+    it("staggers the columns' entrance in grid order, one step apart", () => {
+      // jsdom has no Web Animations API; record which elements animate, and when.
+      const animate = vi.fn(() => ({ cancel: vi.fn() }));
+      Element.prototype.animate = animate as unknown as Element["animate"];
+      const { container } = render(
+        <MemoryRouter>
+          <ArchiveGrid
+            hackathons={[
+              { ...base, slug: "a", project: "A", date: "2026-03" },
+              { ...base, slug: "b", project: "B", date: "2026-02" },
+              { ...base, slug: "c", project: "C", date: "2026-01" },
+            ]}
+          />
+        </MemoryRouter>,
+      );
+      const columns = screen.getAllByRole("article");
+      expect(container.firstElementChild).toHaveAttribute("data-stagger");
+      expect([...container.firstElementChild!.children]).toEqual(columns);
+      const calls = animate.mock.calls as unknown as [Keyframe[], KeyframeAnimationOptions][];
+      expect(animate.mock.contexts).toEqual(columns);
+      expect(calls.map(([, o]) => o.delay)).toEqual([0, 1, 2].map((i) => i * STAGGER_STEP_MS));
+    });
   });
 });
