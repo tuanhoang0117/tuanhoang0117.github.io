@@ -9,7 +9,7 @@ that data and never hard-code project text.
 | --------------- | --------------------------------------------------------------------------- |
 | `site.ts`       | Name, location, time zone, school name, page prompts, socials, nav links    |
 | `mascot.ts`     | The home mascot's visual source (`MascotVisualSource`) and accessible name  |
-| `projects.ts`   | Personal and class projects (`Project[]`)                                   |
+| `projects.ts`   | Personal and class projects (`Project[]`), some with a `CaseStudy`          |
 | `hackathons.ts` | Hackathon projects (`Hackathon[]`), which power the archive and event pages |
 | `resume.ts`     | Education, skills, experience, resume projects                              |
 
@@ -23,6 +23,16 @@ that data and never hard-code project text.
   paths under `public/` (for example `/mascot/mustang-head.png`): the mascot samples the image's
   pixels on a canvas, which a cross-origin image would block.
 - `mascotLabel` is the mascot's accessible name.
+- A `Project` may have a `caseStudy` (rendered at `/portfolio/:slug`), a `period` (display text,
+  like "May – Aug 2026"), and `featured` (exactly one project: it is shown first and larger on
+  the portfolio page). A `CaseStudy`'s `pdf` is a root-relative path to a file in `public/`, not an
+  `https` link, so it lives outside `links`.
+- Case-study copy is first person only where it describes Tuan's own work, and only claims what
+  the private fact sheet confirms. It never names teammates or the client's contacts ("the team",
+  "the association"). It never claims the Mailchimp signup or the donation flow: Tuan didn't do
+  those. `content.test.ts` bans "Mailchimp" in all content and "donation" in the Develop for Good
+  project, and checks names against
+  a private, gitignored list (`private/name-denylist.txt`) on machines that have it.
 - Optional fields mean **unknown**, not zero. Components must render cleanly when they're absent:
   hide the stat, don't show "0" or "undefined".
 - Links are `https://` or `mailto:`. Images always have real alt text.
