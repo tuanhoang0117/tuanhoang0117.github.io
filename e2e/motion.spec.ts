@@ -1,0 +1,390 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+import { hackathons } from "../src/content/hackathons";
+import { projects } from "../src/content/projects";
+import { pageThemes } from "../src/styles/themes";
+
+const LAB = "/lab/motion";
+const CARD_COUNT = hackathons.length + projects.length;
+// Routes whose content a visitor sees first. Each one's main content must be fully visible.
+const ROUTES = ["/", "/hackathons", "/portfolio", "/resume", "/contact", LAB];
+
+/** Resolves once every animation on the page has finished (or after `timeout` ms). */
+async function settle(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 3000 })
+    .toBe(0);
+}
+
+/**
+ * Clicks a main-nav link from inside the page, then waits for the first animation frame in
+ * which the new page is in the DOM. Reports what that first frame looks like, and the page
+ * wrapper's position, so it can be compared with the settled state.
+ */
+function navigateAndCaptureFirstFrame(page: Page, href: string) {
+  return page.evaluate(async (href) => {
+    const link = document.querySelector<HTMLAnchorElement>(
+      `nav[aria-label="Main"] a[href="${href}"]`,
+    );
+    if (!link) throw new Error(`no nav link to ${href}`);
+    const before = document.querySelector("h1")?.textContent;
+    link.click();
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => requestAnimationFrame(r));
+      if (document.querySelector("h1")?.textContent !== before) break;
+    }
+    const wrapper = document.querySelector<HTMLElement>("[data-page-transition]")!;
+    const animations = wrapper.getAnimations();
+    const rect = wrapper.getBoundingClientRect();
+    return {
+      headings: [...document.querySelectorAll("h1")].map((h) => h.textContent),
+      opacity: Number(getComputedStyle(wrapper).opacity),
+      durations: animations.map((a) => Number(a.effect?.getTiming().duration)),
+      rect: { x: rect.x, y: rect.y, width: rect.width },
+    };
+  }, href);
+}
+
+/**
+ * Every card, and every top-level block of the page's main content, that is invisible, clipped,
+ * or pushed off-screen. Opacity is multiplied up the ancestor chain, so a faded wrapper counts.
+ * Nothing scrolls: positions are measured from the top of the page as loaded.
+ */
+function hiddenContent(page: Page) {
+  return page.evaluate(() => {
+    const targets = [
+      ...document.querySelectorAll<HTMLElement>("[data-page-transition] > *"),
+      ...document.querySelectorAll<HTMLElement>("[data-stagger] > *"),
+    ];
+    const problems: string[] = [];
+    for (const el of targets) {
+      const name = `${el.tagName.toLowerCase()} "${el.textContent?.trim().slice(0, 30)}"`;
+      let opacity = 1;
+      for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+        const style = getComputedStyle(n);
+        opacity *= Number(style.opacity);
+        if (style.visibility === "hidden") problems.push(`${name}: visibility hidden`);
+        if (style.transform !== "none") problems.push(`${name}: transform ${style.transform}`);
+        if (style.clipPath !== "none") problems.push(`${name}: clip-path ${style.clipPath}`);
+      }
+      if (opacity < 1) problems.push(`${name}: opacity ${opacity}`);
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) problems.push(`${name}: zero size`);
+      if (r.left < 0 || r.right > document.documentElement.clientWidth || r.top + scrollY < 0) {
+        problems.push(`${name}: off-screen at ${r.left},${r.top}`);
+      }
+    }
+    return { count: targets.length, problems };
+  });
+}
+
+const cards = (page: Page) => page.getByTestId("motion-card");
+
+interface LoggedAnimation {
+  /** The heading id of the Stagger list the element is in, or "page" for the route wrapper. */
+  list: string;
+  delay: number;
+  duration: number;
+}
+
+/**
+ * Logs every Web Animations call as the page makes it. Finished entrances drop out of
+ * document.getAnimations(), so reading them afterwards would race the animations themselves.
+ */
+async function recordAnimations(page: Page) {
+  await page.addInitScript(() => {
+    const log: LoggedAnimation[] = [];
+    (window as unknown as { motionLog: LoggedAnimation[] }).motionLog = log;
+    const original = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      const timing = typeof options === "object" ? options : {};
+      const section = this.closest("section[aria-labelledby]");
+      log.push({
+        list: this.matches("[data-page-transition]")
+          ? "page"
+          : (section?.getAttribute("aria-labelledby")?.replace("motion-", "") ?? "?"),
+        delay: Number(timing.delay ?? 0),
+        duration: Number(timing.duration),
+      });
+      return original.call(this, keyframes, options);
+    };
+  });
+}
+
+const animationLog = (page: Page) =>
+  page.evaluate(() => (window as unknown as { motionLog: LoggedAnimation[] }).motionLog);
+
+test.describe("route transition", () => {
+  test("the incoming page eases in from its first frame, then settles in place", async ({
+    page,
+  }) => {
+    await page.goto(LAB);
+    await settle(page);
+
+    const first = await navigateAndCaptureFirstFrame(page, "/resume");
+    // Only the new page is in the DOM: the old one doesn't linger or flash.
+    expect(first.headings).toEqual(["Resume"]);
+    // The first frame showing the new page is already faded, not at full opacity.
+    expect(first.opacity).toBeLessThan(0.5);
+    expect(first.durations).toHaveLength(1);
+    expect(first.durations[0]).toBeGreaterThanOrEqual(200);
+    expect(first.durations[0]).toBeLessThanOrEqual(350);
+
+    await settle(page);
+    const wrapper = page.locator("[data-page-transition]");
+    await expect(wrapper).toHaveCSS("opacity", "1");
+    await expect(wrapper).toHaveCSS("transform", "none");
+
+    // No layout jump: only a small upward move, never a horizontal shift or a resize.
+    const settled = (await wrapper.boundingBox())!;
+    expect(first.rect.x).toBe(settled.x);
+    expect(first.rect.width).toBe(settled.width);
+    expect(first.rect.y - settled.y).toBeGreaterThanOrEqual(0);
+    expect(first.rect.y - settled.y).toBeLessThanOrEqual(8);
+  });
+
+  test("the first page of a visit isn't faded; its cards still enter", async ({ page }) => {
+    await recordAnimations(page);
+    await page.goto(LAB);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    const log = await animationLog(page);
+    expect(log.filter((a) => a.list === "page")).toEqual([]);
+    expect(log).toHaveLength(CARD_COUNT);
+  });
+
+  test("runs on every route change, not only the first", async ({ page }) => {
+    await page.goto("/");
+    await settle(page);
+    for (const href of ["/hackathons", "/portfolio", "/contact"]) {
+      const first = await navigateAndCaptureFirstFrame(page, href);
+      expect(first.durations, href).toHaveLength(1);
+      expect(first.opacity, href).toBeLessThan(0.5);
+      await settle(page);
+    }
+  });
+});
+
+test.describe("card entrances on /lab/motion", () => {
+  test("cards enter one after another on load, without scrolling", async ({ page }) => {
+    await recordAnimations(page);
+    await page.goto(LAB);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    const log = await animationLog(page);
+    for (const list of ["hackathons", "portfolio"]) {
+      const delays = log.filter((a) => a.list === list).map((a) => a.delay);
+      expect(delays, list).toHaveLength(
+        list === "hackathons" ? hackathons.length : projects.length,
+      );
+      expect(delays[0], list).toBe(0);
+      for (const [i, delay] of delays.slice(1).entries()) {
+        expect(delay - delays[i]!, list).toBeGreaterThanOrEqual(40);
+        expect(delay - delays[i]!, list).toBeLessThanOrEqual(80);
+      }
+    }
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+  });
+
+  test("replaying remounts the lists and plays the entrances again", async ({ page }) => {
+    await page.goto(LAB);
+    await settle(page);
+    await page.getByRole("button", { name: "Replay entrances" }).click();
+    expect(await page.evaluate(() => document.querySelectorAll("[data-stagger] > *").length)).toBe(
+      CARD_COUNT,
+    );
+    expect(await page.evaluate(() => document.getAnimations().length)).toBeGreaterThan(0);
+    await settle(page);
+    expect((await hiddenContent(page)).problems).toEqual([]);
+  });
+
+  test("early in the entrance, every card's text still passes accessibility checks", async ({
+    page,
+  }) => {
+    // Other pages' axe tests run right after load, while their cards may still be entering.
+    // Freeze every card early in its entrance (10%, where a fade would still be faint) and
+    // check what a visitor sees then.
+    await page.goto(LAB);
+    await settle(page);
+    // Click and freeze in one step, so no entrance finishes before it's frozen.
+    const frozen = await page.evaluate(async () => {
+      const replay = [...document.querySelectorAll("button")].find((b) =>
+        b.textContent?.includes("Replay"),
+      )!;
+      replay.click();
+      for (
+        let i = 0;
+        i < 60 && !document.querySelector("[data-stagger] > *")?.getAnimations().length;
+        i++
+      ) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      const cardsInLists = new Set(document.querySelectorAll("[data-stagger] > *"));
+      const animations = document
+        .getAnimations()
+        .filter((a) => cardsInLists.has((a.effect as KeyframeEffect).target!));
+      for (const a of animations) {
+        const { delay, duration } = a.effect!.getTiming();
+        a.pause();
+        a.currentTime = Number(delay) + Number(duration) * 0.1;
+      }
+      return animations.length;
+    });
+    expect(frozen).toBe(CARD_COUNT);
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    expect(violations.map((v) => `${v.impact} ${v.id}: ${v.help}`)).toEqual([]);
+  });
+});
+
+test.describe("no hidden content", () => {
+  for (const path of ROUTES) {
+    test(`${path}: once animations finish, all main content is visible in place`, async ({
+      page,
+    }) => {
+      await page.goto(path);
+      await settle(page);
+      const { count, problems } = await hiddenContent(page);
+      expect(count).toBeGreaterThan(0);
+      expect(problems).toEqual([]);
+    });
+  }
+
+  test("every card is visible on /lab/motion once animations finish", async ({ page }) => {
+    await page.goto(LAB);
+    await settle(page);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    for (const card of await cards(page).all()) {
+      await expect(card).toHaveCSS("opacity", "1");
+    }
+    const { count, problems } = await hiddenContent(page);
+    // The page header, the demo sections' container, and every card.
+    expect(count).toBe(CARD_COUNT + 2);
+    expect(problems).toEqual([]);
+  });
+
+  test("if animations never run, every card is visible at once", async ({ page }) => {
+    // Stands in for a browser that can't animate: no Web Animations API at all.
+    await page.addInitScript(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+    await page.goto(LAB);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+    expect((await hiddenContent(page)).problems).toEqual([]);
+  });
+});
+
+test.describe("reduced motion", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("pages and cards appear in their final state, with no animation", async ({ page }) => {
+    await recordAnimations(page);
+    await page.goto(LAB);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    expect(await animationLog(page)).toEqual([]);
+    expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+    await expect(cards(page)).toHaveCount(CARD_COUNT);
+    expect((await hiddenContent(page)).problems).toEqual([]);
+
+    const first = await navigateAndCaptureFirstFrame(page, "/hackathons");
+    expect(first.headings).toEqual(["Hackathons"]);
+    expect(first.durations).toEqual([]);
+    expect(first.opacity).toBe(1);
+    expect(await animationLog(page)).toEqual([]);
+  });
+
+  test("hovering a card doesn't move it", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "touch devices have no hover");
+    await page.goto(LAB);
+    const card = cards(page).first();
+    await card.hover();
+    await expect(card).toHaveCSS("translate", "none");
+  });
+});
+
+test.describe("card hover and press", () => {
+  test.skip(
+    ({ isMobile }) => isMobile,
+    "touch devices have no hover; hover styles need (hover: hover)",
+  );
+
+  /**
+   * The outermost (last) layer of a block shadow: its color and offset in px. Pass a card index,
+   * or a shadow color class to read the expected color from a throwaway element that uses the
+   * same utilities.
+   */
+  const blockShadow = (page: Page, target: number | string) =>
+    page.evaluate((target) => {
+      let el: Element;
+      let probe: HTMLElement | undefined;
+      if (typeof target === "number") {
+        el = document.querySelectorAll('[data-testid="motion-card"]')[target]!;
+      } else {
+        probe = document.createElement("span");
+        probe.className = `shadow-block ${target}`;
+        document.body.append(probe);
+        el = probe;
+      }
+      const value = getComputedStyle(el).boxShadow;
+      probe?.remove();
+      const last = /(\S+\([^)]*\)|\S+) (-?[\d.]+)px (-?[\d.]+)px 0px 0px$/.exec(value);
+      return last ? { color: last[1], x: Number(last[2]), y: Number(last[3]) } : { value };
+    }, target);
+
+  // The hackathon cards take the Hackathons theme's accents in order (cardShadow()).
+  const accents = pageThemes.hackathons.shadows;
+
+  test("hover lifts the card and grows its accent shadow; press pushes it in", async ({ page }) => {
+    await page.goto(LAB);
+    await settle(page);
+    const card = cards(page).first();
+    const { color } = await blockShadow(page, accents[0]);
+    expect(color).toBeTruthy();
+
+    expect(await blockShadow(page, 0)).toEqual({ color, x: 6, y: 6 });
+    await expect(card).toHaveCSS("translate", "none");
+
+    await card.hover();
+    await expect(card).toHaveCSS("translate", "-2px -2px");
+    await expect.poll(() => blockShadow(page, 0)).toEqual({ color, x: 10, y: 10 });
+
+    await page.mouse.down();
+    await expect(card).toHaveCSS("translate", "2px 2px");
+    await expect.poll(() => blockShadow(page, 0)).toEqual({ color, x: 3, y: 3 });
+    // No mouse up: releasing would click the card's link and leave the page.
+  });
+
+  test("every card keeps its own accent color when its shadow grows", async ({ page }) => {
+    await page.goto(LAB);
+    await settle(page);
+    for (const [i, shadowClass] of accents.entries()) {
+      const { color } = await blockShadow(page, shadowClass);
+      expect(await blockShadow(page, i), shadowClass).toEqual({ color, x: 6, y: 6 });
+      await cards(page).nth(i).hover();
+      await expect
+        .poll(() => blockShadow(page, i), { message: shadowClass })
+        .toEqual({ color, x: 10, y: 10 });
+    }
+  });
+});
+
+test("/lab/motion has no accessibility violations", async ({ page }) => {
+  await page.goto(LAB);
+  await settle(page);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => `${v.impact} ${v.id}: ${v.help}`)).toEqual([]);
+});
+
+test("/lab/motion has no horizontal overflow at 375px, during and after entrances", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.goto(LAB);
+  const overflow = () =>
+    page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+  expect(await overflow()).toBe(0);
+  await settle(page);
+  expect(await overflow()).toBe(0);
+});
