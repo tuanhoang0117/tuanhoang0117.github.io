@@ -115,7 +115,9 @@ describe("resolveMascotFrames", () => {
     } finally {
       getContext.mockRestore();
     }
-  });
+    // About 0.8 s on a quiet machine, so the default 5 s limit fails under heavy load (seen: a
+    // full-suite run next to several browser test runs). A real hang still fails at 30 s.
+  }, 30_000);
 
   it("rejects when an image fails to load", async () => {
     vi.stubGlobal(

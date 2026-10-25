@@ -42,7 +42,7 @@ const SHIMMER_TIMING: KeyframeAnimationOptions = {
 /**
  * Font size follows the screen: 60px on phones, 128px from `md` (768px). Archivo Black is wide
  * ("Tuan Hoang" is about 6.3em: 378px at 60px, 802px at 128px), so the size is fixed and the
- * layout adapts instead: see ONE_LINE.
+ * layout adapts instead: see LEAD_LAYOUT.
  */
 const SIZES = "text-6xl md:text-9xl";
 
