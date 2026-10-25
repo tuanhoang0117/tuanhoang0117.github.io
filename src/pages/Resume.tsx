@@ -52,18 +52,18 @@ export function Resume() {
             <Entry key={e.title} entry={e} />
           ))}
         </Section>
-        <Section n="02" title="Skills">
-          <StackCards groups={resume.skills} />
-        </Section>
-        <Section n="03" title="Experience">
+        <Section n="02" title="Experience">
           {resume.experience.map((e) => (
             <Entry key={e.title} entry={e} />
           ))}
         </Section>
-        <Section n="04" title="Projects">
+        <Section n="03" title="Projects">
           {resume.projects.map((e) => (
             <Entry key={e.title} entry={e} />
           ))}
+        </Section>
+        <Section n="04" title="Skills">
+          <StackCards groups={resume.skills} />
         </Section>
       </div>
     </>
