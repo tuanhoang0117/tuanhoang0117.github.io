@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { checkContrast, formatFailure } from "./helpers/contrast";
 
 const routes = [
   { path: "/", h1: "Tuan Hoang" },
@@ -16,6 +17,14 @@ const routes = [
   { path: "/lab/physics", h1: "Physics Lab" },
   { path: "/portfolio/remind-app", h1: "Remind App" },
 ];
+
+// Routes where the contrast helper found real low-contrast text. Each is skipped, with the reason,
+// until the lead decides how to fix it. The failures are listed in the PR that added the helper.
+// TODO(issue): remove an entry once its page passes, so the check starts guarding that route.
+const contrastKnownFailures: Record<string, string> = {
+  "/resume":
+    "16 decorative glyphs (aria-hidden) are pale on white: diamond #5cb8b2 2.35:1, triangle #ff6a39 2.85:1, plus #3a913f 3.96:1",
+};
 
 for (const { path, h1 } of routes) {
   test.describe(`${path}`, () => {
@@ -39,6 +48,16 @@ for (const { path, h1 } of routes) {
       const { violations } = await new AxeBuilder({ page }).analyze();
       const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
       expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    });
+
+    // axe can't decide text contrast on graph paper (it reports those nodes as "incomplete"), so
+    // the test above says nothing about them. This one checks those nodes itself.
+    test("has enough text contrast where axe can't tell", async ({ page }) => {
+      test.skip(path in contrastKnownFailures, contrastKnownFailures[path]);
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      const { failures } = await checkContrast(page);
+      expect(failures.map(formatFailure)).toEqual([]);
     });
   });
 }

@@ -91,7 +91,9 @@ picking colors ad hoc.
 
 ## Accessibility floor
 
-- Text contrast of at least 4.5:1, checked by axe in CI.
+- Text contrast of at least 4.5:1 (3:1 for large text), checked by axe in CI. Text on graph paper
+  is checked by `e2e/helpers/contrast.ts`, because axe can't decide contrast over a gradient
+  background and reports those nodes as "incomplete" instead of pass or fail.
 - Every interactive element is keyboard reachable with the gold focus ring.
 - Decorative sprites are `aria-hidden`. Meaningful images have real alt text.
 - No horizontal overflow at 375px wide, checked in CI.
