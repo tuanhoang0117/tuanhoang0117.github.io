@@ -84,10 +84,39 @@ picking colors ad hoc.
 
 ## Motion
 
-- Content is never gated behind scrolling ([ADR 0002](decisions/0002-no-scroll-gated-content.md)).
-- Hover feedback: lift `-translate-x-0.5 -translate-y-0.5` against a block shadow.
-- Page transitions (planned): pixel dissolve, under 400ms.
-- `prefers-reduced-motion` disables animation globally. Content must still be complete.
+Motion decorates content and never gates it ([ADR 0002](decisions/0002-no-scroll-gated-content.md)):
+nothing waits for a scroll position, and nothing starts hidden in markup or CSS. Entrances run on
+the Web Animations API from [`src/components/motion/`](../src/components/motion/), so the hidden
+starting frame exists only inside a running animation. If it never runs, content is simply there.
+
+| Motion          | What moves                                                                | Duration          | Easing                       |
+| --------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
+| Route change    | Page content fades in from 0 and rises 8px (`<PageTransition>`)           | 280ms             | `cubic-bezier(0.2, 0, 0, 1)` |
+| Card entrance   | Each card is revealed top to bottom as it rises 8px (`<Stagger>`)         | 240ms, 60ms apart | `cubic-bezier(0.2, 0, 0, 1)` |
+| Hover and press | Lift 2px up-left, shadow one size up; press 2px down-right, one size down | 150ms             | `ease-out`                   |
+
+- **Route change.** Applied once, in the shell (`Layout.tsx`). There's no exit animation: the old
+  page is gone in the same frame the new one appears. The first page of a visit doesn't fade; the
+  browser's load is its entrance, and its cards still enter.
+  The rise animates `top` on a `position: relative` wrapper, not `transform`: page-level
+  animations must not put `transform`, `filter`, `perspective`, `will-change: transform` or
+  `contain: paint` on any ancestor of page content, because that makes the ancestor the containing
+  block for `position: fixed` elements (the physics overlay, the banner, future modals and toasts)
+  and sizes them against the page instead of the window.
+- **Card entrances.** Wrap a list in `<Stagger as="ul">`; each direct child enters in turn on
+  mount. Delays stop growing after the ninth card (480ms), so long lists don't keep their tail
+  waiting. Cards are revealed, not faded, so text is at full contrast at every moment, and an axe
+  check run mid-entrance sees the settled colors. The reveal extends 16px past the card so block
+  shadows aren't cut off.
+- **Hover and press.** Use `cardLift.sm` / `.md` / `.lg` (by resting shadow size) from
+  `src/components/motion/motion.ts`, plus any accent shadow color (`cardShadow()`). The size steps
+  keep the accent color. Hover styles apply only on devices that can hover.
+- **Smooth, not stepped.** These are UI feedback, so they ease smoothly. Sprites still animate in
+  frames (rule 4).
+- **Reduced motion.** Under `prefers-reduced-motion: reduce`, no entrance runs and content renders
+  in its final state. Hover and press don't move the card; the shadow still changes, instantly, as
+  feedback.
+- Demo and test bench: `/lab/motion`.
 
 ## Accessibility floor
 
