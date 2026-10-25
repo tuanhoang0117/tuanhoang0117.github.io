@@ -122,6 +122,10 @@ gh api repos/tuanhoang0117/tuanhoang0117.github.io/commits/<sha>/statuses \
 
 ### Known limitations
 
+- **The credential guard is not a security boundary.** It stops an agent that forgets
+  `scripts/as-bot.sh`; an agent can deliberately unset its environment variables. Instructions,
+  bot-authored history, required checks, and Tuan's approval remain the safeguards against a
+  deliberate bypass.
 - **One bot token for every role.** The lead, engineers, QA, and the reviewer all act as
   `tuanhoang-bot`, so GitHub can't tell them apart. An engineer could technically post
   `agent/review: success` on its own PR, and so could the lead. The instructions forbid it, but
@@ -160,6 +164,8 @@ any one tool:
 - **Credential guard:** `.claude/settings.json` (Claude Code) and
   [`.codex/config.toml`](../.codex/config.toml) (Codex) set the same variables, so plain `gh` and
   `git push` fail in both and only `scripts/as-bot.sh` reaches GitHub.
+- **Stopped agents:** never resume one. Its worktree may have been cleaned up, causing the resumed
+  session to run in the lead's checkout. Dispatch a new agent with a fresh worktree instead.
 
 Only one lead runs at a time, and every PR and review names the tool and model that produced it.
 

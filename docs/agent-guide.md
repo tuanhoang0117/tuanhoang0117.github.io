@@ -52,7 +52,6 @@ you own; touch nothing else.
 
 | Path                                                | Owner                                             |
 | --------------------------------------------------- | ------------------------------------------------- |
-| `src/content/**` (site copy and data)               | Lead only, approved by Tuan.                      |
 | `src/styles/index.css` (tokens)                     | Lead only. Need a token? Say so in the PR.        |
 | `src/content/types.ts`, `src/pixel/types.ts`        | Lead only. Contract changes get their own issue.  |
 | `src/App.tsx` (routes)                              | Lead only. Routes are pre-registered.             |
@@ -75,8 +74,8 @@ A PR is ready for review only when all of these are true:
 
 ## Conventions
 
-- Site copy (bios, prompts, invitations, project text) lives only in `src/content/`, never in JSX.
-  Engineer agents don't write or edit it, and every change to it goes through a PR Tuan approves.
+- Site copy (bios, prompts, invitations, project text) lives only in `src/content/`, never in
+  JSX. Engineer agents never write or edit it. Every change to it goes through a PR Tuan approves.
   Components may hold UI mechanics: button states ("Copied!"), dividers ("or"), and screen-reader
   hints ("(opens in a new tab)"). If a page needs copy that `src/content/` has no field for, stop
   and say so in the PR.
@@ -137,3 +136,9 @@ prevents it.
   `./x.js` for a `.ts` file, which Node can't run: write `.ts` endings.)
 - **Sprint 1 dry run:** QA wrote its report to a fixed `/tmp/qa8.md` and found a previous run's
   report there. Report bodies now go in `mktemp` files.
+- **Sprint 2:** Never resume a stopped agent. Its worktree may already be gone, which can put the
+  resumed agent in the lead's checkout. Start a new agent in a fresh worktree instead.
+- **Sprint 2:** Agents must never encode or disguise a command to get past a guard. If a guard
+  refuses a command, stop and ask Tuan instead of hiding the same operation in another form.
+- **Sprint 2:** Check `git show --stat` before pushing. `git add` aborts entirely when one path is
+  invalid, so a commit can silently omit every intended file if its contents are not inspected.
