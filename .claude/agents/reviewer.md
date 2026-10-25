@@ -41,9 +41,9 @@ Rules for this review were set by Tuan, the product owner. Read `docs/agent-guid
 5. **Design rules.** Tokens only: no raw hex and no arbitrary Tailwind `[...]` values in
    components. No blurred shadows. Pixel art uses `crispEdges`. No horizontal overflow at 375px.
 6. **Content honesty.** Site copy (bios, prompts, invitations, project text) comes only from
-   `src/content/`, and the PR doesn't change it unless the issue allows it. UI mechanics (button states like "Copied!", dividers
-   like "or", screen-reader hints like "(opens in a new tab)") may live in components. See
-   `docs/agent-guide.md` → Conventions.
+   `src/content/`, and engineer PRs never change it. UI mechanics (button states like "Copied!",
+   dividers like "or", screen-reader hints like "(opens in a new tab)") may live in components.
+   See `docs/agent-guide.md` → Conventions.
 7. **Accessibility.** Keyboard reachable, visible focus, alt text, no **serious or critical** axe
    violations (the site-wide standard the e2e tests enforce), reduced motion respected.
 

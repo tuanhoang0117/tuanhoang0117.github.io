@@ -28,7 +28,7 @@ coverage
 private/
 
 # Local Claude Code instructions; the shared agent rules are in docs/agent-guide.md
-CLAUDE.md
+/CLAUDE.md
 
 # Agent worktrees (local, created by Claude Code and scripts/dispatch.sh)
 .claude/worktrees/
