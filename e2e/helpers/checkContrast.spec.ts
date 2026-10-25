@@ -49,3 +49,17 @@ test("flags low-contrast text on graph paper that axe leaves incomplete", async 
   ).toBe(false);
   await expect(checkContrast(page)).rejects.toThrow(/\.prompt/);
 });
+
+test("composites ancestor opacity once for text and its background", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".prompt").evaluate((element) => {
+    const group = element.parentElement!;
+    group.style.backgroundColor = "black";
+    group.style.opacity = "0.66";
+    group.querySelectorAll("h1, .prompt").forEach((text) => {
+      (text as HTMLElement).style.color = "white";
+    });
+  });
+
+  await expect(checkContrast(page)).resolves.toBeUndefined();
+});

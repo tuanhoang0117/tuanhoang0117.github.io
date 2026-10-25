@@ -40,6 +40,25 @@ export function alphaBlend(foreground: Color, background: Color): Color {
   };
 }
 
+function composite(foreground: Color, background: Color): Color {
+  const foregroundAlpha = Math.max(0, Math.min(1, foreground.a));
+  const backgroundAlpha = Math.max(0, Math.min(1, background.a));
+  const alpha = foregroundAlpha + backgroundAlpha * (1 - foregroundAlpha);
+  if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  return {
+    r:
+      (foreground.r * foregroundAlpha + background.r * backgroundAlpha * (1 - foregroundAlpha)) /
+      alpha,
+    g:
+      (foreground.g * foregroundAlpha + background.g * backgroundAlpha * (1 - foregroundAlpha)) /
+      alpha,
+    b:
+      (foreground.b * foregroundAlpha + background.b * backgroundAlpha * (1 - foregroundAlpha)) /
+      alpha,
+    a: alpha,
+  };
+}
+
 function luminance(color: Color): number {
   const channels = [color.r, color.g, color.b].map((channel) => {
     const normalized = channel / 255;
@@ -67,7 +86,7 @@ type StyleSnapshot = {
   fontWeight: number;
   opacity: number;
   hidden: boolean;
-  backgrounds: { color: string; opacity: number }[];
+  backgrounds: string[];
 };
 
 function formatColor(color: Color): string {
@@ -113,7 +132,7 @@ export async function checkContrast(page: Page): Promise<void> {
                 ancestorStyle.visibility === "collapse" ||
                 rect.width === 0 ||
                 rect.height === 0;
-              return { color: ancestorStyle.backgroundColor, opacity: alpha };
+              return ancestorStyle.backgroundColor;
             });
             return {
               selector: target,
@@ -137,18 +156,20 @@ export async function checkContrast(page: Page): Promise<void> {
         seen.add(key);
         if (snapshot.hidden || snapshot.opacity <= 0) continue;
 
-        let background = fallback;
+        let localBackground: Color = { r: 0, g: 0, b: 0, a: 0 };
         for (const layer of snapshot.backgrounds) {
-          const color = parseColor(layer.color);
-          const painted = alphaBlend(color, background);
-          background =
-            layer.opacity >= 1 ? painted : alphaBlend({ ...painted, a: layer.opacity }, background);
+          localBackground = composite(parseColor(layer), localBackground);
         }
+        const background = alphaBlend(
+          { ...localBackground, a: localBackground.a * snapshot.opacity },
+          fallback,
+        );
         const fill = parseColor(snapshot.color);
         const foreground =
           fill.a === 0 && snapshot.strokeWidth > 0 ? parseColor(snapshot.strokeColor) : fill;
         if (foreground.a * snapshot.opacity <= 0) continue;
-        const text = alphaBlend({ ...foreground, a: foreground.a * snapshot.opacity }, background);
+        const localText = composite(foreground, localBackground);
+        const text = alphaBlend({ ...localText, a: localText.a * snapshot.opacity }, fallback);
         const ratio = contrastRatio(text, background);
         const threshold = contrastThreshold(snapshot.fontSize, snapshot.fontWeight);
         if (ratio + 0.005 < threshold) {
