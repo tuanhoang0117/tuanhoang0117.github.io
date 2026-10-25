@@ -14,15 +14,19 @@ async function open(page: Page) {
 }
 
 test.describe("/lab/title", () => {
-  // 320px is the narrowest width the issue promises, 375px is the width docs/design-system.md
-  // promises, 1280px is desktop. The font sizes are the steps HeroTitle documents: Archivo Black
-  // is too wide for 60px under 448px of space, so phones get a smaller size rather than clipping.
-  for (const { width, fontSize } of [
-    { width: 320, fontSize: "36px" },
-    { width: 375, fontSize: "48px" },
-    { width: 1280, fontSize: "128px" },
+  // Issue #22 asks for about 60px on phones and about 128px from `md` (768px). Archivo Black is too
+  // wide for that on one line in a narrow space, so the name stacks ("Tuan" over "Hoang") where
+  // one line won't fit and stays on one line where it does (decided by Tuan, recorded on PR #38).
+  // 320px is the narrowest width promised, 375px is the width docs/design-system.md promises.
+  for (const { width, fontSize, lines } of [
+    { width: 320, fontSize: "60px", lines: 2 },
+    { width: 375, fontSize: "60px", lines: 2 },
+    { width: 600, fontSize: "60px", lines: 1 },
+    { width: 768, fontSize: "128px", lines: 2 },
+    { width: 1024, fontSize: "128px", lines: 1 },
+    { width: 1280, fontSize: "128px", lines: 1 },
   ]) {
-    test(`at ${width}px the name is ${fontSize}, on one line, unclipped, with no overflow`, async ({
+    test(`at ${width}px the name is ${fontSize} on ${lines} line${lines > 1 ? "s" : ""}, unclipped, with no overflow`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 800 });
@@ -37,8 +41,10 @@ test.describe("/lab/title", () => {
         // The visible words (not the aria-hidden copy) must share one line box.
         const walker = document.createTreeWalker(h, NodeFilter.SHOW_TEXT);
         const tops: number[] = [];
+        let visible = "";
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
           if (n.parentElement!.closest("[data-shimmer]") || !n.textContent!.trim()) continue;
+          visible += n.textContent;
           const r = document.createRange();
           r.selectNodeContents(n);
           for (const rect of r.getClientRects()) tops.push(Math.round(rect.top));
@@ -46,6 +52,7 @@ test.describe("/lab/title", () => {
         const box = h.getBoundingClientRect();
         const shimmer = h.querySelector("[data-shimmer]")!.getBoundingClientRect();
         return {
+          text: visible.replace(/\s+/g, " ").trim(),
           lines: new Set(tops).size,
           height: box.height,
           lineHeight: parseFloat(getComputedStyle(h).lineHeight),
@@ -60,10 +67,11 @@ test.describe("/lab/title", () => {
           overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         };
       });
-      expect(m.lines, "the name wraps").toBe(1);
-      expect(m.height, "the heading is taller than one line").toBeLessThanOrEqual(
-        Math.ceil(m.lineHeight),
+      expect(m.lines, "wrong number of lines").toBe(lines);
+      expect(m.height, "the heading is taller than its lines").toBeLessThanOrEqual(
+        Math.ceil(m.lineHeight) * lines,
       );
+      expect(m.text, "the visible text changed").toBe(site.name.replace(" ", ""));
       expect(m.scrollWidth, "text overflows its heading").toBeLessThanOrEqual(m.clientWidth);
       expect(m.textLeft).toBeGreaterThanOrEqual(m.boxLeft);
       expect(m.textRight, "text runs past its heading").toBeLessThanOrEqual(m.boxRight);
@@ -80,6 +88,14 @@ test.describe("/lab/title", () => {
     await expect(title(page)).toHaveAccessibleName(site.name);
     await expect(overlay(page)).toHaveAttribute("aria-hidden", "true");
     await expect(overlay(page)).toHaveText(lastWord);
+    await expect(page.getByRole("heading", { name: site.name })).toHaveCount(1);
+  });
+
+  test("stacked, the name is still read once as exactly the site name", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await open(page);
+    await expect(title(page)).toHaveAccessibleName(site.name);
+    await expect(title(page)).toHaveText(`${site.name}${lastWord}`);
     await expect(page.getByRole("heading", { name: site.name })).toHaveCount(1);
   });
 

@@ -40,10 +40,18 @@ const SHIMMER_TIMING: KeyframeAnimationOptions = {
 };
 
 /**
- * Font size per container width: each step is the largest Tailwind size whose 6.3em fits.
- * 36px under 320px, 48px from 320, 60px from 448, 72px from 576, 96px from 672, 128px from 896.
+ * Font size follows the screen: 60px on phones, 128px from `md` (768px). Archivo Black is wide
+ * ("Tuan Hoang" is about 6.3em: 378px at 60px, 802px at 128px), so the size is fixed and the
+ * layout adapts instead: see ONE_LINE.
  */
-const SIZES = "text-4xl @xs:text-5xl @md:text-6xl @xl:text-7xl @2xl:text-8xl @4xl:text-9xl";
+const SIZES = "text-6xl md:text-9xl";
+
+/**
+ * "Tuan" shares a line with "Hoang" only where the whole name fits. The heading's container must
+ * be at least @sm (384px) wide on phones, or @4xl (896px) from `md`. Otherwise "Tuan" is a block
+ * and "Hoang" drops under it.
+ */
+const LEAD_LAYOUT = "block @sm:max-md:inline md:@4xl:inline";
 
 interface HeroTitleProps {
   /** The heading level. `h1` on the home page; lower where a page already has its own `h1`. */
@@ -74,13 +82,16 @@ export function HeroTitle({ as: Tag = "h1" }: HeroTitleProps) {
   }, [reduced]);
 
   return (
-    // Sized by the space it's given (container queries on Tailwind's default sizes), so the name
-    // stays on one line wherever it's mounted. Archivo Black is wide: "Tuan Hoang" is about 6.3em.
+    // Container queries on the space the title is given choose one line or two (LEAD_LAYOUT).
     <div className="@container">
       <Tag
         className={`font-display leading-tight tracking-tight whitespace-nowrap text-ink ${SIZES}`}
       >
-        {lead && <>{lead} </>}
+        {lead && (
+          <>
+            <span className={LEAD_LAYOUT}>{lead}</span>{" "}
+          </>
+        )}
         <span className="relative inline-block">
           <span>{last}</span>
           <span

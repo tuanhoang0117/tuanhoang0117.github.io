@@ -61,6 +61,18 @@ describe("HeroTitle", () => {
     expect(heading.textContent).toBe(`${site.name}${lastWord}`);
   });
 
+  it("is 60px on phones and 128px from md, and joins the lead word to the line only where it fits", () => {
+    mockReducedMotion(false);
+    render(<HeroTitle />);
+    const heading = screen.getByRole("heading", { level: 1 });
+    // jsdom can't lay out, so check the classes; e2e/hero-title.spec.ts measures the result.
+    expect(heading).toHaveClass("text-6xl", "md:text-9xl");
+    const lead = heading.firstElementChild!;
+    expect(lead).toHaveTextContent(site.name.slice(0, site.name.lastIndexOf(" ")));
+    // Stacked by default, one line at @sm on phones and at @4xl from md.
+    expect(lead).toHaveClass("block", "@sm:max-md:inline", "md:@4xl:inline");
+  });
+
   it("renders the requested heading level", () => {
     mockReducedMotion(false);
     render(<HeroTitle as="h2" />);
