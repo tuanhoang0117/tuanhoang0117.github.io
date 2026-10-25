@@ -21,6 +21,9 @@ independent reviewer agent, and human review.
 
 ## Development
 
+Claude Code users: after a fresh clone, create the ignored root `CLAUDE.md` with exactly one line:
+`@docs/agent-guide.md`.
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
