@@ -16,6 +16,22 @@ async function settle(page: Page) {
     .toBe(0);
 }
 
+/** Like `settle`, but ignores endless loops (the banner scrolls forever). */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
 /**
  * Clicks a main-nav link from inside the page, then waits for the first animation frame in
  * which the new page is in the DOM. Reports what that first frame looks like, and the page
@@ -41,6 +57,8 @@ function navigateAndCaptureFirstFrame(page: Page, href: string) {
       opacity: Number(getComputedStyle(wrapper).opacity),
       durations: animations.map((a) => Number(a.effect?.getTiming().duration)),
       rect: { x: rect.x, y: rect.y, width: rect.width },
+      top: parseFloat(getComputedStyle(wrapper).top) || 0,
+      transform: getComputedStyle(wrapper).transform,
     };
   }, href);
 }
@@ -126,6 +144,10 @@ test.describe("route transition", () => {
     expect(first.headings).toEqual(["Resume"]);
     // The first frame showing the new page is already faded, not at full opacity.
     expect(first.opacity).toBeLessThan(0.5);
+    // The rise is a relative `top` offset, never a transform (see the fixed-element tests below).
+    expect(first.transform).toBe("none");
+    expect(first.top).toBeGreaterThan(0);
+    expect(first.top).toBeLessThanOrEqual(8);
     expect(first.durations).toHaveLength(1);
     expect(first.durations[0]).toBeGreaterThanOrEqual(200);
     expect(first.durations[0]).toBeLessThanOrEqual(350);
@@ -134,6 +156,7 @@ test.describe("route transition", () => {
     const wrapper = page.locator("[data-page-transition]");
     await expect(wrapper).toHaveCSS("opacity", "1");
     await expect(wrapper).toHaveCSS("transform", "none");
+    await expect(wrapper).toHaveCSS("top", "0px");
 
     // No layout jump: only a small upward move, never a horizontal shift or a resize.
     const settled = (await wrapper.boundingBox())!;
@@ -160,6 +183,119 @@ test.describe("route transition", () => {
       expect(first.durations, href).toHaveLength(1);
       expect(first.opacity, href).toBeLessThan(0.5);
       await settle(page);
+    }
+  });
+});
+
+/**
+ * Goes to `from`, then to `target` by history navigation inside the app (an in-app link, then
+ * Back), so the route transition runs. A direct load skips it. Returns what `measure` saw on the
+ * first animation frame showing `selector`, while the page animation was still running, and
+ * again once everything had settled.
+ */
+async function reachByRouteChange<T>(
+  page: Page,
+  target: string,
+  selector: string,
+  measure: (el: Element) => T,
+) {
+  await page.goto(target);
+  await settleEntrances(page);
+  await page.evaluate(() =>
+    document.querySelector<HTMLAnchorElement>('nav[aria-label="Main"] a[href="/resume"]')!.click(),
+  );
+  await expect(page.getByRole("heading", { level: 1, name: "Resume" })).toBeVisible();
+  await settleEntrances(page);
+  await page.evaluate(
+    ([selector, source]) => {
+      const w = window as unknown as { firstFrame?: unknown };
+      window.addEventListener(
+        "popstate",
+        async () => {
+          for (let i = 0; i < 120 && !document.querySelector(selector); i++) {
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          const wrapper = document.querySelector("[data-page-transition]")!;
+          const measureFn = new Function(`return (${source})`)() as (el: Element) => unknown;
+          w.firstFrame = {
+            animating: wrapper.getAnimations().length > 0,
+            opacity: Number(getComputedStyle(wrapper).opacity),
+            value: measureFn(document.querySelector(selector)!),
+          };
+        },
+        { once: true },
+      );
+    },
+    [selector, measure.toString()] as const,
+  );
+  await page.goBack();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { firstFrame?: unknown }).firstFrame))
+    .toBeTruthy();
+  const first = (await page.evaluate(
+    () => (window as unknown as { firstFrame: unknown }).firstFrame,
+  )) as { animating: boolean; opacity: number; value: T };
+  await settleEntrances(page);
+  const settled = await page.locator(selector).evaluate(measure);
+  return { first, settled };
+}
+
+test.describe("fixed elements during the route transition", () => {
+  test("the physics canvas matches the viewport after in-app navigation", async ({ page }) => {
+    const { first, settled } = await reachByRouteChange(
+      page,
+      "/lab/physics",
+      '[data-testid="physics-overlay"]',
+      (el) => {
+        const c = el as HTMLCanvasElement;
+        return {
+          width: c.width,
+          height: c.height,
+          clientWidth: c.clientWidth,
+          clientHeight: c.clientHeight,
+          dpr: window.devicePixelRatio,
+          viewWidth: document.documentElement.clientWidth,
+          viewHeight: window.innerHeight,
+        };
+      },
+    );
+    // The measurement really happened mid-transition, not after it.
+    expect(first.animating).toBe(true);
+    expect(first.opacity).toBeLessThan(1);
+    for (const v of [first.value, settled]) {
+      expect(v.clientWidth).toBe(v.viewWidth);
+      expect(v.clientHeight).toBe(v.viewHeight);
+      expect(v.width).toBe(Math.round(v.clientWidth * v.dpr));
+      expect(v.height).toBe(Math.round(v.clientHeight * v.dpr));
+    }
+  });
+
+  test("the banner sits on the viewport edge from the first frame after in-app navigation", async ({
+    page,
+  }) => {
+    const { first, settled } = await reachByRouteChange(
+      page,
+      "/lab/banner",
+      '[data-testid="school-banner"]',
+      (el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          top: r.top,
+          bottom: r.bottom,
+          left: r.left,
+          right: r.right,
+          viewWidth: document.documentElement.clientWidth,
+          viewHeight: window.innerHeight,
+          vertical: (el as HTMLElement).dataset.orientation === "vertical",
+        };
+      },
+    );
+    expect(first.animating).toBe(true);
+    for (const v of [first.value, settled]) {
+      expect(v.right).toBe(v.viewWidth);
+      expect(v.bottom).toBe(v.viewHeight);
+      if (v.vertical) expect(v.top).toBe(0);
+      else expect(v.left).toBe(0);
     }
   });
 });

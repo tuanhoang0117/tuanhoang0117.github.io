@@ -34,10 +34,18 @@ export function staggerDelay(index: number, step: number = STAGGER_STEP_MS): num
   return Math.min(Math.max(index, 0), STAGGER_MAX_INDEX) * step;
 }
 
-/** Route change: the whole page fades in and rises. */
+/**
+ * Route change: the whole page fades in and rises.
+ *
+ * The rise animates `top` on a `position: relative` wrapper, never `transform`. A transform (or
+ * filter, perspective, will-change: transform, contain: paint) on any ancestor makes it the
+ * containing block for `position: fixed` descendants, so the physics overlay and the banner
+ * would be sized and placed against the page wrapper instead of the window. A relative offset
+ * moves the wrapper visually without creating a containing block or reflowing its siblings.
+ */
 export const pageKeyframes: Keyframe[] = [
-  { opacity: 0, transform: `translateY(${ENTER_DISTANCE_PX}px)` },
-  { opacity: 1, transform: "none" },
+  { opacity: 0, top: `${ENTER_DISTANCE_PX}px` },
+  { opacity: 1, top: "0px" },
 ];
 
 /**

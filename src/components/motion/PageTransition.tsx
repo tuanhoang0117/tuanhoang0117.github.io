@@ -4,8 +4,9 @@ import { PAGE_ENTER_MS, pageKeyframes, playEntrance } from "./motion";
 
 /**
  * Eases the page in on every route change. There's no exit animation: the old page is replaced
- * in the same commit, so it never lingers or flashes. Only opacity and transform animate, so
- * nothing reflows.
+ * in the same commit, so it never lingers or flashes. Only opacity and a relative `top` offset
+ * animate, so nothing reflows and no ancestor of the page gets a containing block for fixed
+ * elements (see `pageKeyframes`).
  *
  * The first page of a visit doesn't fade: the browser's own load is its entrance, and its cards
  * still enter through `<Stagger>`. That keeps the first paint at full contrast and full opacity.
@@ -32,7 +33,7 @@ export function PageTransition({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   return (
-    <div ref={ref} data-page-transition="">
+    <div ref={ref} data-page-transition="" className="relative">
       {children}
     </div>
   );

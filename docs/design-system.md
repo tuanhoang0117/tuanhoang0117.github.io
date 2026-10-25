@@ -98,6 +98,11 @@ starting frame exists only inside a running animation. If it never runs, content
 - **Route change.** Applied once, in the shell (`Layout.tsx`). There's no exit animation: the old
   page is gone in the same frame the new one appears. The first page of a visit doesn't fade; the
   browser's load is its entrance, and its cards still enter.
+  The rise animates `top` on a `position: relative` wrapper, not `transform`: page-level
+  animations must not put `transform`, `filter`, `perspective`, `will-change: transform` or
+  `contain: paint` on any ancestor of page content, because that makes the ancestor the containing
+  block for `position: fixed` elements (the physics overlay, the banner, future modals and toasts)
+  and sizes them against the page instead of the window.
 - **Card entrances.** Wrap a list in `<Stagger as="ul">`; each direct child enters in turn on
   mount. Delays stop growing after the ninth card (480ms), so long lists don't keep their tail
   waiting. Cards are revealed, not faded, so text is at full contrast at every moment, and an axe

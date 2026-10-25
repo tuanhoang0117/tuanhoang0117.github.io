@@ -5,6 +5,7 @@ import {
   CARD_ENTER_MS,
   ENTER_EASING,
   PAGE_ENTER_MS,
+  pageKeyframes,
   STAGGER_MAX_INDEX,
   STAGGER_STEP_MS,
   staggerDelay,
@@ -165,6 +166,15 @@ function renderRoutes() {
   return router;
 }
 
+describe("pageKeyframes", () => {
+  it("never uses a property that makes the page a containing block for fixed elements", () => {
+    const banned = ["transform", "filter", "perspective", "willChange", "contain", "translate"];
+    for (const frame of pageKeyframes) {
+      for (const property of banned) expect(frame, property).not.toHaveProperty(property);
+    }
+  });
+});
+
 describe("PageTransition", () => {
   it("leaves the first page of a visit alone", () => {
     renderRoutes();
@@ -181,8 +191,8 @@ describe("PageTransition", () => {
     expect(animate).toHaveBeenCalledTimes(1);
     const [keyframes, options] = animate.mock.calls[0]!;
     expect(keyframes[0]).toMatchObject({ opacity: 0 });
-    expect(keyframes[0]!.transform).toMatch(/^translateY\(\d+px\)$/);
-    expect(keyframes.at(-1)).toEqual({ opacity: 1, transform: "none" });
+    expect(keyframes[0]!.top).toMatch(/^\d+px$/);
+    expect(keyframes.at(-1)).toEqual({ opacity: 1, top: "0px" });
     expect(options).toEqual({
       duration: PAGE_ENTER_MS,
       delay: 0,
