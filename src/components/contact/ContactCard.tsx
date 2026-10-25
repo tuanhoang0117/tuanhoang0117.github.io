@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { contact, site } from "../../content/site";
+import { Stagger } from "../motion";
 import { ContactIcon } from "./ContactIcon";
 import { CopyEmailButton } from "./CopyEmailButton";
 import { cardShadow, pageThemes } from "../../styles/themes";
@@ -13,8 +14,9 @@ const copy = {
 
 export function ContactCard() {
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-12">
+    <Stagger className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-12">
       <div
+        data-testid="contact-card"
         className={`border-2 border-ink bg-card p-6 shadow-block-lg sm:p-8 lg:col-span-7 lg:p-12 ${cardShadow(pageThemes.contact, 0)}`}
       >
         <h1 className="font-display text-outline text-5xl tracking-tight uppercase">
@@ -65,6 +67,6 @@ export function ContactCard() {
           {resumeNav.label} →
         </Link>
       </aside>
-    </div>
+    </Stagger>
   );
 }

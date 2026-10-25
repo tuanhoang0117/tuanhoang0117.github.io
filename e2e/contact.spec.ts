@@ -12,6 +12,50 @@ const expectedLinks = order.map((prefix) => {
 });
 
 const card = (page: Page) => page.getByRole("main").locator("ul").getByRole("link");
+// The two blocks of the layout: the contact card, then the resume lead-in beside it.
+const blocks = (page: Page) =>
+  page.getByTestId("contact-card").or(page.getByRole("main").getByRole("complementary"));
+
+/**
+ * Waits until the card entrances have finished, so layout is measured where the cards rest, not
+ * mid-rise. Ignores endless loops (the banner scrolls forever).
+ */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
+/** Records every Web Animations call on the page: the element's test id or tag, and its delay. */
+async function recordEntrances(page: Page) {
+  await page.addInitScript(() => {
+    const log: { target: string; delay: number }[] = [];
+    (window as unknown as { entranceLog: typeof log }).entranceLog = log;
+    const original = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      const timing = typeof options === "object" ? options : {};
+      log.push({
+        target: this.getAttribute("data-testid") ?? this.tagName.toLowerCase(),
+        delay: Number(timing.delay ?? 0),
+      });
+      return original.call(this, keyframes, options);
+    };
+  });
+}
+
+const entranceLog = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { entranceLog: { target: string; delay: number }[] }).entranceLog,
+  );
 
 test.describe("/contact", () => {
   test.beforeEach(async ({ page }) => {
@@ -37,6 +81,7 @@ test.describe("/contact", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
+    await settleEntrances(page);
     const copy = (await page.getByRole("button", { name: "Copy email" }).boundingBox())!;
     const resume = (await page
       .getByRole("main")
@@ -50,7 +95,10 @@ test.describe("/contact", () => {
     const { gap, bottom } = await page.evaluate(() => {
       const main = document.querySelector("main")!;
       const footer = document.querySelector("footer")!;
-      const blocks = [...main.querySelectorAll("section > div > *")] as HTMLElement[];
+      const blocks = [
+        main.querySelector('[data-testid="contact-card"]')!,
+        main.querySelector("aside")!,
+      ];
       const bottom = Math.max(...blocks.map((el) => el.getBoundingClientRect().bottom));
       return { bottom, gap: footer.getBoundingClientRect().top - bottom };
     });
@@ -63,13 +111,48 @@ test.describe("/contact", () => {
   test("the card and lead-in carry accent block shadows from the Contact theme", async ({
     page,
   }) => {
-    const shadows = await page
-      .getByRole("main")
-      .locator("section > div > *")
-      .evaluateAll((els) => els.map((el) => getComputedStyle(el).boxShadow));
+    const shadows = await blocks(page).evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).boxShadow),
+    );
     expect(shadows).toHaveLength(2);
     for (const s of shadows) expect(s).not.toBe("none");
     expect(new Set(shadows).size).toBe(2);
+  });
+
+  test("the card, then the resume lead-in, enter one after another on load", async ({ page }) => {
+    await recordEntrances(page);
+    await page.goto("/contact");
+    await expect(blocks(page)).toHaveCount(2);
+    // Both blocks are the direct children of one Stagger list, card first.
+    expect(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("main [data-stagger] > *")].map(
+          (el) => el.getAttribute("data-testid") ?? el.tagName.toLowerCase(),
+        ),
+      ),
+    ).toEqual(["contact-card", "aside"]);
+    const log = await entranceLog(page);
+    expect(log).toEqual([
+      { target: "contact-card", delay: 0 },
+      { target: "aside", delay: expect.any(Number) },
+    ]);
+    expect(log[1]!.delay).toBeGreaterThanOrEqual(40);
+    expect(log[1]!.delay).toBeLessThanOrEqual(80);
+  });
+
+  test("under reduced motion, the card and lead-in appear in place with no entrance", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await recordEntrances(page);
+    await page.goto("/contact");
+    await expect(blocks(page)).toHaveCount(2);
+    expect(await entranceLog(page)).toEqual([]);
+    for (const block of await blocks(page).all()) {
+      await expect(block).toBeVisible();
+      await expect(block).toHaveCSS("transform", "none");
+      await expect(block).toHaveCSS("clip-path", "none");
+    }
   });
 
   test("Copy email puts the address on the clipboard", async ({ page, context, browserName }) => {

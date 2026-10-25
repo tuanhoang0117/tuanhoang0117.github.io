@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { STAGGER_STEP_MS } from "../motion/motion";
 import { contact, socials } from "../../content/site";
 import { pageThemes } from "../../styles/themes";
 import { ContactCard } from "./ContactCard";
@@ -70,8 +71,27 @@ describe("ContactCard", () => {
     expect(within(aside).getByText(contact.resumeLead)).toBeInTheDocument();
   });
 
-  it("links to the resume under the card", () => {
+  it("links to the resume from the lead-in beside the card", () => {
     renderCard();
     expect(screen.getByRole("link", { name: /resume/i })).toHaveAttribute("href", "/resume");
+  });
+
+  describe("entrance", () => {
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+
+    it("staggers the card, then the resume lead-in, one step apart", () => {
+      // jsdom has no Web Animations API; record which elements animate, and when.
+      const animate = vi.fn(() => ({ cancel: vi.fn() }));
+      Element.prototype.animate = animate as unknown as Element["animate"];
+      const { container } = renderCard();
+      const blocks = [screen.getByTestId("contact-card"), screen.getByRole("complementary")];
+      expect(container.firstElementChild).toHaveAttribute("data-stagger");
+      expect([...container.firstElementChild!.children]).toEqual(blocks);
+      const calls = animate.mock.calls as unknown as [Keyframe[], KeyframeAnimationOptions][];
+      expect(animate.mock.contexts).toEqual(blocks);
+      expect(calls.map(([, o]) => o.delay)).toEqual([0, STAGGER_STEP_MS]);
+    });
   });
 });
