@@ -38,7 +38,8 @@ test.describe("/lab/title", () => {
         const range = document.createRange();
         range.selectNodeContents(h);
         const text = range.getBoundingClientRect();
-        // The visible words (not the aria-hidden copy) must share one line box.
+        // Count the lines the visible words (not the aria-hidden copy) occupy: one where the name fits,
+        // two where it stacks.
         const walker = document.createTreeWalker(h, NodeFilter.SHOW_TEXT);
         const tops: number[] = [];
         let visible = "";

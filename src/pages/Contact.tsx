@@ -10,7 +10,7 @@ export function Contact() {
   }, []);
 
   return (
-    <section className="px-4 py-12 sm:px-8 sm:py-20">
+    <section className="px-4 py-12 sm:px-8 sm:py-16 lg:py-20">
       <ContactCard />
     </section>
   );

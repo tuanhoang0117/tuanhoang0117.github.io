@@ -58,6 +58,34 @@ async function dropAndSettle(page: Page, clicks: number) {
 }
 
 test.describe("/lab/physics", () => {
+  test("keeps viewport sizing when an ancestor is transformed or filtered", async ({ page }) => {
+    await page.goto("/lab/physics");
+    for (const style of ["transform: translateY(8px)", "filter: blur(0px)"]) {
+      await page.evaluate((value) => {
+        document.querySelector("#root")?.setAttribute("style", value);
+      }, style);
+      const measured = await overlay(page).evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const canvas = el as HTMLCanvasElement;
+        return {
+          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          width: canvas.width,
+          height: canvas.height,
+          dpr: window.devicePixelRatio,
+          viewport: { width: innerWidth, height: innerHeight },
+        };
+      });
+      expect(measured.rect).toEqual({
+        x: 0,
+        y: 0,
+        width: measured.viewport.width,
+        height: measured.viewport.height,
+      });
+      expect(measured.width).toBe(Math.round(measured.viewport.width * measured.dpr));
+      expect(measured.height).toBe(Math.round(measured.viewport.height * measured.dpr));
+    }
+  });
+
   test("clicking drops tokens that come to rest at the bottom of the viewport", async ({
     page,
   }) => {
@@ -147,6 +175,17 @@ test.describe("/lab/physics", () => {
       { width: height - 200, height: width }, // rotate
     ]) {
       await page.setViewportSize(next);
+      await expect
+        .poll(() =>
+          overlay(page).evaluate((el, { width, height }) => {
+            const canvas = el as HTMLCanvasElement;
+            return (
+              canvas.width === Math.round(width * devicePixelRatio) &&
+              canvas.height === Math.round(height * devicePixelRatio)
+            );
+          }, next),
+        )
+        .toBe(true);
       await expect(overlay(page)).toHaveAttribute("data-resting", "true", {
         timeout: REST_TIMEOUT,
       });
