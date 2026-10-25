@@ -55,7 +55,7 @@ export const projects: Project[] = [
         },
       ],
       role: [
-        "I built pages in Square Online from the team's high-fidelity Figma designs, delivering 2 of the site's 8 pages and revising them through weekly client reviews.",
+        "As a volunteer developer on the team, I built pages in Square Online from the team's high-fidelity Figma designs, delivering 2 of the site's 8 pages and revising them through weekly client reviews.",
         "I raised the site's desktop Lighthouse Accessibility score from 72 to 87 by fixing WCAG failures: corrected contrast ratios, restored the H1–H3 heading order, and replaced ambiguous links with accessible buttons.",
         "I worked on the site's search optimization.",
         "I co-wrote the project requirements document, the client handoff guide, and the Demo Day technical presentation.",
