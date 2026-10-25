@@ -66,23 +66,31 @@ test.describe("/lab/mascot", () => {
   test("Enter and Space each fire onActivate once, from the center", async ({ page }) => {
     await mascot(page).focus();
     const box = (await mascot(page).boundingBox())!;
-    const center = `${Math.round(box.x + box.width / 2)}, ${Math.round(box.y + box.height / 2)}`;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
     await page.keyboard.press("Enter");
     await expect(calls(page)).toHaveText("1");
     await page.keyboard.press("Space");
     await expect(calls(page)).toHaveText("2");
-    await expect(last(page)).toHaveText(`keyboard @ ${center}`);
+    // The page prints the center rounded from its own measurement, which can land half a pixel
+    // from ours (at 375px the center is 187.5), so allow 1px instead of an exact string.
+    const printed = (await last(page).innerText()).match(/^keyboard @ (-?\d+), (-?\d+)$/);
+    expect(printed, "the readout should show a keyboard activation").not.toBeNull();
+    expect(Math.abs(Number(printed![1]) - centerX)).toBeLessThanOrEqual(1);
+    expect(Math.abs(Number(printed![2]) - centerY)).toBeLessThanOrEqual(1);
   });
 
   test("activation gives press feedback, then releases", async ({ page }) => {
-    // Read the state 120ms after the press: the 75ms scale transition is done and the press
-    // (PRESS_MS, 160ms) hasn't ended yet.
+    // Read the state 120ms after the press: the press (PRESS_MS, 160ms) hasn't ended yet, and the
+    // 75ms scale transition is done or nearly so. A busy CI runner can still be a hair short of
+    // 0.95 (it read 0.950354), so compare the number with a tolerance instead of the exact string.
     const during = await mascot(page).evaluate(async (b: HTMLButtonElement) => {
       b.click();
       await new Promise((resolve) => setTimeout(resolve, 120));
       return { pressed: b.hasAttribute("data-pressed"), scale: getComputedStyle(b).scale };
     });
-    expect(during).toEqual({ pressed: true, scale: "0.95" });
+    expect(during.pressed).toBe(true);
+    expect(Math.abs(Number(during.scale) - 0.95)).toBeLessThan(0.01);
     await expect(mascot(page)).not.toHaveAttribute("data-pressed");
     await expect.poll(() => mascot(page).evaluate((b) => getComputedStyle(b).scale)).toBe("none");
   });
