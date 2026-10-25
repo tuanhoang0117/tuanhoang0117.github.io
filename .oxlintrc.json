@@ -4,5 +4,23 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["scripts/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^\\.{1,2}/.*\\.js$",
+                "message": "Use the real .ts extension so Node can execute the script."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
