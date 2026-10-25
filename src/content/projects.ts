@@ -8,6 +8,80 @@ const gh = (repo: string) => ({
 // Newest first. Every claim here is checked against the owner's private fact sheet.
 export const projects: Project[] = [
   {
+    slug: "tar-syndrome-website",
+    title: "TAR Syndrome Association Website",
+    summary:
+      "A redesign of the TAR Syndrome Association's website, built with a Develop for Good team for a nonprofit client that supports people and families affected by a rare condition. I built pages in Square Online from the team's designs, worked on SEO, and raised the site's Lighthouse accessibility score from 72 to 87.",
+    stack: ["Square Online", "Figma", "Lighthouse", "SEO"],
+    images: [],
+    links: [{ label: "Live site", href: "https://tar-syndrome-awareness.square.site/" }],
+    period: "May – Aug 2026",
+    featured: true,
+    caseStudy: {
+      overview:
+        "The TAR Syndrome Association is a nonprofit that raises awareness of Thrombocytopenia-Absent Radius (TAR) syndrome and supports the people and families affected by this rare condition. From May to August 2026, a Develop for Good team redesigned its website.",
+      problem:
+        "The existing site needed clearer organization, easier navigation, and information that was easier to reach for patients, families, and healthcare professionals. The goal was to reorganize it, keep what was already there, and add educational, support, research, and engagement resources.",
+      process: [
+        {
+          title: "Mapped the site",
+          detail:
+            "The team defined the new pages and what each one covers: a home page, and pages for families, healthcare professionals, research and advocacy, kids and young adolescents, getting involved, and contact.",
+        },
+        {
+          title: "Researched similar sites",
+          detail:
+            "We looked at five websites that present medical conditions, to see how they organize information and keep it readable.",
+        },
+        {
+          title: "Designed in three rounds",
+          detail:
+            "Low-fidelity layouts, then mid-fidelity, then high-fidelity prototypes in Figma, with weekly client meetings shaping each round.",
+        },
+        {
+          title: "Tested with users",
+          detail:
+            "Three testers walked through the pages. Their feedback on color contrast, font sizes, headings, and how much text each section carried changed the final designs. We also ran Google Lighthouse accessibility checks.",
+        },
+        {
+          title: "Built it in Square Online",
+          detail:
+            "The approved designs were implemented page by page in the client's Square Online site, a no-code site builder.",
+        },
+        {
+          title: "Handed it off",
+          detail:
+            "We wrote a client handoff guide so the association can keep adding content after the program, and presented the work at Demo Day.",
+        },
+      ],
+      role: [
+        "I built pages in Square Online from the team's high-fidelity Figma designs, delivering 2 of the site's 8 pages and revising them through weekly client reviews.",
+        "I raised the site's desktop Lighthouse Accessibility score from 72 to 87 by fixing WCAG failures: corrected contrast ratios, restored the H1–H3 heading order, and replaced ambiguous links with accessible buttons.",
+        "I worked on the site's search optimization.",
+        "I co-wrote the project requirements document, the client handoff guide, and the Demo Day technical presentation.",
+        "I was frustrated at first because the work involved no coding. It's now the work I'm proudest of: a real client, a team, and a site that helps people with TAR syndrome.",
+      ],
+      results: [
+        "The site was reorganized for its two main audiences: people with TAR syndrome and the caregivers of children with it.",
+        "In user testing, people praised how easy the navigation was and how intuitive it was to find information.",
+        "The desktop Lighthouse Accessibility score rose from 72 to 87.",
+        "When the program ended, some sections still needed the association's own text and images, which it adds using the handoff guide.",
+      ],
+      tools: [
+        "Square Online",
+        "Figma",
+        "UserTesting",
+        "Google Lighthouse",
+        "Notion",
+        "Google Sheets",
+      ],
+      pdf: {
+        label: "Download the team case study (PDF)",
+        href: "/develop-for-good-case-study.pdf",
+      },
+    },
+  },
+  {
     slug: "cal-poly-food-pantry",
     title: "Cal Poly Food Pantry Inventory",
     summary:

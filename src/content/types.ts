@@ -25,6 +25,32 @@ export interface Project {
   stack: string[];
   images: Image[];
   links: Link[];
+  /** When the work happened, as display text, e.g. "May – Aug 2026". Absent if unknown. */
+  period?: string;
+  /** Shown first and larger on the portfolio page. */
+  featured?: boolean;
+  /** A written case study, rendered at /portfolio/:slug. Projects without one link out only. */
+  caseStudy?: CaseStudy;
+}
+
+/**
+ * A project's case study. First person where it describes Tuan's own work. Never name teammates
+ * or the client's contacts: say "the team" or "the association".
+ */
+export interface CaseStudy {
+  /** Who the project was for and what it was. */
+  overview: string;
+  /** What needed solving. */
+  problem: string;
+  /** How the work went, in order. */
+  process: { title: string; detail: string }[];
+  /** What Tuan personally did, one claim per entry. Only what the private fact sheet confirms. */
+  role: string[];
+  results: string[];
+  /** Tools the team used. */
+  tools: string[];
+  /** The team's full case study, a PDF served from public/ (a root-relative path). */
+  pdf?: Link;
 }
 
 /** A project built at a hackathon. Powers the archive and per-event detail pages. */
