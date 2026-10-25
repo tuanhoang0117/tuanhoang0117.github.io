@@ -59,13 +59,14 @@ export const projects: Project[] = [
         "I raised the site's desktop Lighthouse Accessibility score from 72 to 87 by fixing WCAG failures: corrected contrast ratios, restored the H1–H3 heading order, and replaced ambiguous links with accessible buttons.",
         "I worked on the site's search optimization.",
         "I co-wrote the project requirements document, the client handoff guide, and the Demo Day technical presentation.",
-        "I was frustrated at first because the work involved no coding. It's now the work I'm proudest of: a real client, a team, and a site that helps people with TAR syndrome.",
       ],
+      reflection:
+        "I was frustrated at first because the work involved no coding. It's now the work I'm proudest of: a real client, a team, and a site that helps people with TAR syndrome.",
       results: [
         "The site was reorganized for its two main audiences: people with TAR syndrome and the caregivers of children with it.",
         "In user testing, people praised how easy the navigation was and how intuitive it was to find information.",
         "The desktop Lighthouse Accessibility score rose from 72 to 87.",
-        "When the program ended, some sections still needed the association's own text and images, which it adds using the handoff guide.",
+        "When the program ended, some sections still needed the association's own text and images, which the association can add using the handoff guide.",
       ],
       tools: [
         "Square Online",

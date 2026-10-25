@@ -30,7 +30,8 @@ that data and never hard-code project text.
 - Case-study copy is first person only where it describes Tuan's own work, and only claims what
   the private fact sheet confirms. It never names teammates or the client's contacts ("the team",
   "the association"). It never claims the Mailchimp signup or the donation flow: Tuan didn't do
-  those. `content.test.ts` checks the Mailchimp/donation rule everywhere, and checks names against
+  those. `content.test.ts` bans "Mailchimp" in all content and "donation" in the Develop for Good
+  project, and checks names against
   a private, gitignored list (`private/name-denylist.txt`) on machines that have it.
 - Optional fields mean **unknown**, not zero. Components must render cleanly when they're absent:
   hide the stat, don't show "0" or "undefined".

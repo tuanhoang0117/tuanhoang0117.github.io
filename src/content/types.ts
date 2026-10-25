@@ -46,6 +46,8 @@ export interface CaseStudy {
   process: { title: string; detail: string }[];
   /** What Tuan personally did, one claim per entry. Only what the private fact sheet confirms. */
   role: string[];
+  /** A short first-person reflection, kept apart from `role` because it isn't a work claim. */
+  reflection?: string;
   results: string[];
   /** Tools the team used. */
   tools: string[];

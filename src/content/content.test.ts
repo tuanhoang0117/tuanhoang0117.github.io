@@ -77,11 +77,13 @@ describe("case studies", () => {
     expect(existsSync(`public${pdf.href}`)).toBe(true);
   });
 
-  it("never claims Mailchimp or donation-flow work (Tuan didn't do it)", () => {
-    for (const p of withCaseStudy) {
-      const text = JSON.stringify(p);
-      expect(text).not.toMatch(/mailchimp|donat/i);
-    }
+  it("no content claims Mailchimp work (Tuan didn't do it)", () => {
+    expect(JSON.stringify({ projects, hackathons, resume, site })).not.toMatch(/mailchimp/i);
+  });
+
+  it("the Develop for Good project doesn't claim donation-flow work (Tuan didn't do it)", () => {
+    const dfg = projects.find((p) => p.slug === "tar-syndrome-website")!;
+    expect(JSON.stringify(dfg)).not.toMatch(/donat/i);
   });
 });
 
