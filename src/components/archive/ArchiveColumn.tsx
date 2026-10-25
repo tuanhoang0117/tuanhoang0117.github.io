@@ -3,6 +3,7 @@ import type { Hackathon } from "../../content/types";
 import { EventImage } from "./EventImage";
 import { formatDateLabel, statsLine, stripLabel } from "./format";
 import { tintStyles } from "./tints";
+import { cardShadow, pageThemes } from "../../styles/themes";
 
 interface ArchiveColumnProps {
   hackathon: Hackathon;
@@ -17,7 +18,7 @@ export function ArchiveColumn({ hackathon: h, index }: ArchiveColumnProps) {
   return (
     <article
       aria-labelledby={`hackathon-${h.slug}`}
-      className={`flex flex-col border-2 border-ink ${tintStyles[h.tint].column}`}
+      className={`flex flex-col border-2 border-ink shadow-block-lg ${cardShadow(pageThemes.hackathons, index)} ${tintStyles[h.tint].column}`}
     >
       <div className="relative px-5 pt-6 sm:px-6">
         <EventImage image={h.image} tint={h.tint} seed={h.slug} />
@@ -40,7 +41,7 @@ export function ArchiveColumn({ hackathon: h, index }: ArchiveColumnProps) {
         )}
         <h2
           id={`hackathon-${h.slug}`}
-          className="mt-2 font-display text-4xl tracking-tight break-words sm:text-5xl"
+          className="mt-2 font-display text-4xl tracking-tight break-words sm:text-5xl xl:text-3xl"
         >
           {h.project}
         </h2>

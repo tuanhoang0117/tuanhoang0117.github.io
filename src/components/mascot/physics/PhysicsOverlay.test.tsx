@@ -23,6 +23,8 @@ let nextFrame: number;
 let now: number;
 let engines: Matter.Engine[];
 let listeners: { add: MockInstance; remove: MockInstance }[];
+let resizeCallbacks: ResizeObserverCallback[];
+let resizeDisconnects: number;
 
 const pixels = (width: number, height: number) => ({
   data: new Uint8ClampedArray(width * height * 4),
@@ -69,8 +71,8 @@ function advanceFrames(count: number) {
   }
 }
 
-const overlayCanvas = (container: HTMLElement) =>
-  container.querySelector<HTMLCanvasElement>('[data-testid="physics-overlay"]');
+const overlayCanvas = (_container: HTMLElement) =>
+  document.body.querySelector<HTMLCanvasElement>('[data-testid="physics-overlay"]');
 
 const tokenBodies = () =>
   Matter.Composite.allBodies(engines.at(-1)!.world).filter((b) => !b.isStatic);
@@ -106,6 +108,20 @@ beforeEach(() => {
     add: vi.spyOn(target, "addEventListener"),
     remove: vi.spyOn(target, "removeEventListener"),
   }));
+  resizeCallbacks = [];
+  resizeDisconnects = 0;
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
+      observe() {}
+      disconnect() {
+        resizeDisconnects++;
+      }
+    },
+  );
 });
 
 afterEach(() => {
@@ -116,7 +132,7 @@ describe("PhysicsOverlay", () => {
   it("is one transparent, full-viewport canvas that never takes pointer events", () => {
     const { container } = render(<PhysicsOverlay />);
     const canvas = overlayCanvas(container)!;
-    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(document.body.querySelectorAll("canvas")).toHaveLength(1);
     expect(canvas).toHaveAttribute("aria-hidden", "true");
     expect(canvas).toHaveClass("pointer-events-none", "fixed", "inset-0", "h-full", "w-full");
     expect(canvas.width).toBe(window.innerWidth);
@@ -211,6 +227,32 @@ describe("PhysicsOverlay", () => {
     }
   });
 
+  it("re-measures its own box when a transformed wrapper changes it", () => {
+    const { container } = render(
+      <div style={{ transform: "translateY(8px)" }}>
+        <PhysicsOverlay />
+      </div>,
+    );
+    const canvas = overlayCanvas(container)!;
+    Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 640 });
+    Object.defineProperty(canvas, "clientHeight", { configurable: true, value: 480 });
+    act(() =>
+      resizeCallbacks.forEach((cb) =>
+        cb(
+          [
+            {
+              target: canvas,
+              contentRect: { width: 640, height: 480 },
+            } as unknown as ResizeObserverEntry,
+          ],
+          {} as ResizeObserver,
+        ),
+      ),
+    );
+    expect(canvas.width).toBe(Math.round(640 * window.devicePixelRatio));
+    expect(canvas.height).toBe(Math.round(480 * window.devicePixelRatio));
+  });
+
   it("under reduced motion, renders nothing and drops no tokens", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query.includes("reduce"),
@@ -218,10 +260,10 @@ describe("PhysicsOverlay", () => {
       removeEventListener: () => {},
     }));
     const ref = createRef<PhysicsOverlayHandle>();
-    const { container } = render(<PhysicsOverlay ref={ref} />);
+    render(<PhysicsOverlay ref={ref} />);
     act(() => ref.current!.spawnAt(200, 100));
     advanceFrames(3);
-    expect(container.querySelector("canvas")).toBeNull();
+    expect(document.body.querySelector("canvas")).toBeNull();
     expect(engines).toHaveLength(0);
     expect(frames.size).toBe(0);
     vi.unstubAllGlobals();
@@ -247,6 +289,7 @@ describe("PhysicsOverlay", () => {
       expect(added.length).toBeGreaterThan(0);
       expect(removed).toEqual(expect.arrayContaining(added));
     }
+    expect(resizeDisconnects).toBe(1);
     // A stale handle is harmless and starts nothing.
     handle.spawnAt(10, 10);
     expect(frames.size).toBe(0);

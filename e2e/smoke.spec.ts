@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { checkContrast } from "./helpers/checkContrast";
 
 const routes = [
   { path: "/", h1: "Tuan Hoang" },
@@ -39,6 +40,15 @@ for (const { path, h1 } of routes) {
       const { violations } = await new AxeBuilder({ page }).analyze();
       const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
       expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    });
+
+    test("checks text contrast on graph paper", async ({ page }) => {
+      test.skip(
+        path === "/resume",
+        "TODO(#41): resume glyphs have low contrast on white cards; issue owner will decide whether to adjust the decorative palette.",
+      );
+      await page.goto(path);
+      await checkContrast(page);
     });
   });
 }

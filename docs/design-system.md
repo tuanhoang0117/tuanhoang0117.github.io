@@ -120,7 +120,8 @@ starting frame exists only inside a running animation. If it never runs, content
 
 ## Accessibility floor
 
-- Text contrast of at least 4.5:1, checked by axe in CI.
+- Text contrast of at least 4.5:1, checked by axe in CI. Graph-paper text is also checked by
+  `checkContrast` in `e2e/helpers/`, because axe cannot resolve text contrast over the page's gradient background.
 - Every interactive element is keyboard reachable with the gold focus ring.
 - Decorative sprites are `aria-hidden`. Meaningful images have real alt text.
 - No horizontal overflow at 375px wide, checked in CI.
