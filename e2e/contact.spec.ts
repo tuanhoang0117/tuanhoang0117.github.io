@@ -33,6 +33,45 @@ test.describe("/contact", () => {
     );
   });
 
+  test("uses the page width at 1280px: card beside the resume lead-in, no empty band above the footer", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const copy = (await page.getByRole("button", { name: "Copy email" }).boundingBox())!;
+    const resume = (await page
+      .getByRole("main")
+      .getByRole("link", { name: /resume/i })
+      .boundingBox())!;
+    // Same row, resume lead-in to the right of the card (so Tab order matches reading order).
+    expect(resume.x).toBeGreaterThan(copy.x + copy.width);
+    const last = (await card(page).last().boundingBox())!;
+    expect(resume.y).toBeLessThan(last.y + last.height);
+
+    const { gap, bottom } = await page.evaluate(() => {
+      const main = document.querySelector("main")!;
+      const footer = document.querySelector("footer")!;
+      const blocks = [...main.querySelectorAll("section > div > *")] as HTMLElement[];
+      const bottom = Math.max(...blocks.map((el) => el.getBoundingClientRect().bottom));
+      return { bottom, gap: footer.getBoundingClientRect().top - bottom };
+    });
+    expect(bottom).toBeGreaterThan(0);
+    // Section padding (80px) plus the 10px shadow; an empty band would be far larger.
+    expect(gap).toBeLessThanOrEqual(96);
+    expect(gap).toBeGreaterThanOrEqual(0);
+  });
+
+  test("the card and lead-in carry accent block shadows from the Contact theme", async ({
+    page,
+  }) => {
+    const shadows = await page
+      .getByRole("main")
+      .locator("section > div > *")
+      .evaluateAll((els) => els.map((el) => getComputedStyle(el).boxShadow));
+    expect(shadows).toHaveLength(2);
+    for (const s of shadows) expect(s).not.toBe("none");
+    expect(new Set(shadows).size).toBe(2);
+  });
+
   test("Copy email puts the address on the clipboard", async ({ page, context, browserName }) => {
     test.skip(browserName !== "chromium", "Clipboard permissions are Chromium-only");
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);

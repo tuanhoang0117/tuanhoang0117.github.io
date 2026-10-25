@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { contact, site } from "../../content/site";
 import { ContactIcon } from "./ContactIcon";
 import { CopyEmailButton } from "./CopyEmailButton";
+import { cardShadow, pageThemes } from "../../styles/themes";
 import { contactLinks, contactNav, resumeNav } from "./links";
 
 // UI mechanics only. Copy in Tuan's voice comes from src/content/site.ts.
@@ -12,8 +13,10 @@ const copy = {
 
 export function ContactCard() {
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="border-2 border-ink bg-card p-6 shadow-block-lg sm:p-8">
+    <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-12">
+      <div
+        className={`border-2 border-ink bg-card p-6 shadow-block-lg sm:p-8 lg:col-span-7 lg:p-12 ${cardShadow(pageThemes.contact, 0)}`}
+      >
         <h1 className="font-display text-outline text-5xl tracking-tight uppercase">
           {contactNav.label}
         </h1>
@@ -51,15 +54,17 @@ export function ContactCard() {
         </ul>
       </div>
 
-      <p className="mt-8 text-center text-sm">
-        {contact.resumeLead}{" "}
+      <aside
+        className={`flex flex-col justify-center gap-6 border-2 border-ink p-6 shadow-block-lg sm:p-8 lg:col-span-5 lg:p-12 ${pageThemes.contact.wash} ${cardShadow(pageThemes.contact, 1)}`}
+      >
+        <p className="text-2xl font-semibold sm:text-3xl">{contact.resumeLead}</p>
         <Link
           to={resumeNav.href}
-          className="font-semibold underline decoration-2 underline-offset-4 hover:text-poly"
+          className="self-start border-2 border-ink bg-card px-5 py-3 font-semibold shadow-block-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
         >
           {resumeNav.label} →
         </Link>
-      </p>
+      </aside>
     </div>
   );
 }

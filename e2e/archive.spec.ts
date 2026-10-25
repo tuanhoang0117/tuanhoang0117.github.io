@@ -72,11 +72,30 @@ test.describe("/hackathons", () => {
     expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 
+  test("fills the row at 1280px: every column sits in one row, none orphaned below", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(columns(page)).toHaveCount(expected.length);
+    const tops = await columns(page).evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+  });
+
+  test("columns carry accent block shadows, each a different color", async ({ page }) => {
+    const shadows = await columns(page).evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).boxShadow),
+    );
+    for (const s of shadows) expect(s).not.toBe("none");
+    expect(new Set(shadows).size).toBe(expected.length);
+  });
+
   // 375px is the width docs/design-system.md promises; 800px is a tablet; 1280px is desktop.
   for (const { width, cols } of [
     { width: 375, cols: 1 },
     { width: 800, cols: 2 },
-    { width: 1280, cols: 3 },
+    { width: 1280, cols: 4 },
   ]) {
     test(`lays out ${cols} column(s) at ${width}px with no horizontal overflow`, async ({
       page,

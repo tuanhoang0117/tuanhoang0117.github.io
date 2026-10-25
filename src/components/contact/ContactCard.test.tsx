@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { contact, socials } from "../../content/site";
+import { pageThemes } from "../../styles/themes";
 import { ContactCard } from "./ContactCard";
 import { contactKind } from "./links";
 
@@ -59,6 +60,14 @@ describe("ContactCard", () => {
     } finally {
       Object.assign(contact, original);
     }
+  });
+
+  it("puts the resume lead-in on the Contact theme's wash and shadow, not bare on the page", () => {
+    renderCard();
+    const aside = screen.getByRole("complementary");
+    expect(aside).toHaveClass(pageThemes.contact.wash, pageThemes.contact.shadows[1]);
+    expect(within(aside).getByRole("link", { name: /resume/i })).toBeInTheDocument();
+    expect(within(aside).getByText(contact.resumeLead)).toBeInTheDocument();
   });
 
   it("links to the resume under the card", () => {

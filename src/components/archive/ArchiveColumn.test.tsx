@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Hackathon } from "../../content/types";
+import { pageThemes } from "../../styles/themes";
 import { ArchiveColumn } from "./ArchiveColumn";
 import { ArchiveGrid } from "./ArchiveGrid";
 
@@ -47,6 +48,14 @@ describe("ArchiveColumn", () => {
     expect(within(column).queryByTestId("image-placeholder")).toBeNull();
     expect(within(column).getByTestId("winner-sticker")).toHaveTextContent(/^Winner/);
     expect(within(column).getByText("01 ACE")).toBeInTheDocument();
+  });
+
+  it("takes its shadow color from the Hackathons theme, cycling by position", () => {
+    const shadows = pageThemes.hackathons.shadows;
+    renderColumn(full, 0);
+    expect(screen.getByRole("article")).toHaveClass("shadow-block-lg", shadows[0]);
+    renderColumn({ ...full, slug: "b", project: "B" }, shadows.length + 1);
+    expect(screen.getByRole("article", { name: "B" })).toHaveClass(shadows[1]);
   });
 
   it("links to the event's detail page", () => {
