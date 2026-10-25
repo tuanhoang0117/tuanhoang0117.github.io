@@ -50,6 +50,29 @@ async function loop(page: Page) {
 }
 
 test.describe("/lab/banner", () => {
+  test("stays at the viewport edge above transformed or filtered ancestors", async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto("/lab/banner");
+    const view = page.viewportSize()!;
+    for (const style of ["transform: translateY(8px)", "filter: blur(0px)"]) {
+      await page.evaluate(
+        (value) => document.querySelector("#root")?.setAttribute("style", value),
+        style,
+      );
+      const b = await box(banner(page));
+      if (isMobile) {
+        expect(b.x).toBe(0);
+        expect(b.y + b.height).toBe(view.height);
+      } else {
+        expect(b.x + b.width).toBe(view.width);
+        expect(b.y).toBe(0);
+        expect(b.height).toBe(view.height);
+      }
+    }
+  });
+
   test("is a full-height strip on the right at desktop, a full-width strip at the bottom at 375px", async ({
     page,
     isMobile,
