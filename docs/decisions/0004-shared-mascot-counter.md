@@ -1,6 +1,6 @@
 # 0004. Shared mascot counter backend
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-25)
 - **Date:** 2026-10-24
 - **Decision owner:** Tuan Hoang
 
@@ -157,8 +157,17 @@ implementation should:
 5. keep the client-side local fallback required by issue #29; and
 6. document Wrangler login, Durable Object migration, deployment, quota monitoring, and rollback.
 
-This ADR remains **Proposed**. Tuan chooses the backend before any endpoint or client code is built;
-accepting a different option should update this record with his decision and rationale.
+## Decision
+
+Tuan chose the Cloudflare option on 2026-10-25, and the lead recorded it as the **Worker with one
+SQLite-backed Durable Object**, not Workers KV: KV cannot do the atomic increment the requirements
+call for (see the options above). He did not give a separate reason beyond choosing Cloudflare; the
+rationale is the one in "Proposed decision" (strong consistency for one counter, one free platform,
+no secret in the browser, one account to maintain).
+
+Before any build starts, recheck the vendor limits quoted above (they were published values as of
+2026-10-24), and write down the setup steps Tuan must do himself (Cloudflare account, `wrangler
+login`, deploy) in the build issue (#29). No token is committed or printed.
 
 ## Consequences
 
