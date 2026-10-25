@@ -23,6 +23,7 @@ let nextFrame: number;
 let now: number;
 let engines: Matter.Engine[];
 let listeners: { add: MockInstance; remove: MockInstance }[];
+let resizeCallbacks: ResizeObserverCallback[];
 
 const pixels = (width: number, height: number) => ({
   data: new Uint8ClampedArray(width * height * 4),
@@ -106,6 +107,17 @@ beforeEach(() => {
     add: vi.spyOn(target, "addEventListener"),
     remove: vi.spyOn(target, "removeEventListener"),
   }));
+  resizeCallbacks = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
 });
 
 afterEach(() => {
@@ -209,6 +221,32 @@ describe("PhysicsOverlay", () => {
       expect(Matter.Composite.allBodies(engine.world).filter((b) => b.isStatic)).toHaveLength(3);
       expect(contexts.some((c) => c.imageSmoothingEnabled === false)).toBe(true);
     }
+  });
+
+  it("re-measures its own box when a transformed wrapper changes it", () => {
+    const { container } = render(
+      <div style={{ transform: "translateY(8px)" }}>
+        <PhysicsOverlay />
+      </div>,
+    );
+    const canvas = overlayCanvas(container)!;
+    Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 640 });
+    Object.defineProperty(canvas, "clientHeight", { configurable: true, value: 480 });
+    act(() =>
+      resizeCallbacks.forEach((cb) =>
+        cb(
+          [
+            {
+              target: canvas,
+              contentRect: { width: 640, height: 480 },
+            } as unknown as ResizeObserverEntry,
+          ],
+          {} as ResizeObserver,
+        ),
+      ),
+    );
+    expect(canvas.width).toBe(Math.round(640 * window.devicePixelRatio));
+    expect(canvas.height).toBe(Math.round(480 * window.devicePixelRatio));
   });
 
   it("under reduced motion, renders nothing and drops no tokens", () => {

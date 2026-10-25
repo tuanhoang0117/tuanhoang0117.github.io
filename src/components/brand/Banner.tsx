@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { school } from "../../content/site";
 import { useReducedMotion } from "../../pixel/useReducedMotion";
 
@@ -167,7 +168,7 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
     else anim.play();
   }, [hidden, duration, vertical]);
 
-  return (
+  const content = (
     <div
       ref={stripRef}
       data-testid="school-banner"
@@ -175,6 +176,8 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
       data-copies={copies}
       data-state={hidden ? "hidden" : "shown"}
       aria-hidden={hidden || undefined}
+      role="region"
+      aria-label={`${school.name} banner`}
       className={[
         "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-300",
         "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2",
@@ -200,4 +203,5 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
       </div>
     </div>
   );
+  return typeof document === "undefined" ? content : createPortal(content, document.body);
 }

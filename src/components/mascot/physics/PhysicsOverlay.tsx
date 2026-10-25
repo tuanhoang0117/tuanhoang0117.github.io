@@ -44,9 +44,9 @@ export function PhysicsOverlay({
     const variantOf = new WeakMap<Matter.Body, number>();
     let nextVariant = 0;
     const ctx = canvas.getContext("2d");
-    const measure = () => ({
-      width: canvas.clientWidth || window.innerWidth,
-      height: canvas.clientHeight || window.innerHeight,
+    const measure = (entry?: ResizeObserverEntry) => ({
+      width: entry?.contentRect.width || canvas.clientWidth || window.innerWidth,
+      height: entry?.contentRect.height || canvas.clientHeight || window.innerHeight,
     });
     let size = measure();
     const world = createTokenWorld({ ...size, radius: art.radius, maxBodies });
@@ -109,13 +109,14 @@ export function PhysicsOverlay({
       pending = 0;
     };
 
-    const onResize = () => {
-      size = measure();
+    const resize = (entry?: ResizeObserverEntry) => {
+      size = measure(entry);
       fitCanvas();
       world.resize(size.width, size.height);
       draw();
       start();
     };
+    const onResize = () => resize();
     const onVisibility = () => (document.hidden ? stop() : start());
 
     fitCanvas();
@@ -123,6 +124,11 @@ export function PhysicsOverlay({
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
     document.addEventListener("visibilitychange", onVisibility);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(([entry]) => resize(entry));
+    resizeObserver?.observe(canvas);
     spawnRef.current = (x, y) => {
       variantOf.set(world.spawnAt(x, y), nextVariant++ % Math.max(1, art.variants.length));
       draw();
@@ -135,6 +141,7 @@ export function PhysicsOverlay({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      resizeObserver?.disconnect();
       world.destroy();
       frames.release();
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
