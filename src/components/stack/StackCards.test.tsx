@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { resume } from "../../content/resume";
 import { groupSlug } from "./filter";
 import { glyphs } from "./glyphs";
@@ -100,5 +100,96 @@ describe("StackCards", () => {
     expect(pressed()).toHaveLength(1);
     expect(pressed()[0]).toHaveTextContent(/^All/);
     expect(cards()).toHaveLength(total);
+  });
+});
+
+const carousel = () => screen.getByTestId("carousel");
+const moving = () => carousel().getAttribute("data-moving");
+
+function stubReducedMotion(reduce: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: reduce && query.includes("reduce"),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+
+describe("StackCards carousel", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("moves by default and pauses while hovered", () => {
+    renderAt();
+    expect(moving()).toBe("true");
+    fireEvent.mouseEnter(carousel());
+    expect(moving()).toBe("false");
+    fireEvent.mouseLeave(carousel());
+    expect(moving()).toBe("true");
+  });
+
+  it("pauses while keyboard focus is inside it, and resumes when focus leaves", () => {
+    renderAt();
+    expect(moving()).toBe("true");
+    const card = cards()[0]!;
+    act(() => card.focus());
+    expect(moving()).toBe("false");
+    act(() => card.blur());
+    expect(moving()).toBe("true");
+  });
+
+  it("has a pause/play button whose name tracks the state", async () => {
+    const user = userEvent.setup();
+    renderAt();
+    await user.click(screen.getByRole("button", { name: "Pause scrolling" }));
+    expect(moving()).toBe("false");
+    // Hover ends, but the user's pause stays.
+    fireEvent.mouseLeave(carousel());
+    expect(moving()).toBe("false");
+    await user.click(screen.getByRole("button", { name: "Play scrolling" }));
+    expect(moving()).toBe("true");
+    expect(screen.queryByRole("button", { name: "Pause scrolling" })).not.toBeNull();
+  });
+
+  it("loops with duplicate lists hidden from screen readers and out of the tab order", () => {
+    const { container } = renderAt();
+    const lists = [...container.querySelectorAll("ul")];
+    expect(lists.length).toBeGreaterThanOrEqual(2);
+    expect(lists[0]).not.toHaveAttribute("aria-hidden");
+    for (const dup of lists.slice(1)) {
+      expect(dup).toHaveAttribute("aria-hidden", "true");
+      expect(dup.querySelectorAll("li")).toHaveLength(total);
+      expect(dup.querySelectorAll("[tabindex]")).toHaveLength(0);
+    }
+    // Screen readers (and role queries) see each skill once; every real card is a tab stop.
+    expect(screen.getAllByRole("list")).toHaveLength(1);
+    expect(cards()).toHaveLength(total);
+    expect(cards().every((li) => li.getAttribute("tabindex") === "0")).toBe(true);
+  });
+
+  it("scrolls the row over time, and stops when paused", async () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => queue.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const user = userEvent.setup();
+    renderAt();
+    expect(carousel().scrollLeft).toBe(0);
+    act(() => queue.pop()!(performance.now() + 100));
+    const after = carousel().scrollLeft;
+    expect(after).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Pause scrolling" }));
+    queue.length = 0;
+    await act(async () => {});
+    expect(queue).toHaveLength(0);
+    expect(carousel().scrollLeft).toBe(after);
+  });
+
+  it("with reduced motion renders one static strip: no button, no copies, no movement", () => {
+    stubReducedMotion(true);
+    const { container } = renderAt();
+    expect(moving()).toBe("false");
+    expect(container.querySelectorAll("ul")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /scrolling/i })).toBeNull();
+    expect(cards()).toHaveLength(total);
+    expect(carousel().className).toContain("overflow-x-auto");
   });
 });
