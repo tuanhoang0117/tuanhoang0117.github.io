@@ -24,6 +24,7 @@ let now: number;
 let engines: Matter.Engine[];
 let listeners: { add: MockInstance; remove: MockInstance }[];
 let resizeCallbacks: ResizeObserverCallback[];
+let resizeDisconnects: number;
 
 const pixels = (width: number, height: number) => ({
   data: new Uint8ClampedArray(width * height * 4),
@@ -70,8 +71,8 @@ function advanceFrames(count: number) {
   }
 }
 
-const overlayCanvas = (container: HTMLElement) =>
-  container.querySelector<HTMLCanvasElement>('[data-testid="physics-overlay"]');
+const overlayCanvas = (_container: HTMLElement) =>
+  document.body.querySelector<HTMLCanvasElement>('[data-testid="physics-overlay"]');
 
 const tokenBodies = () =>
   Matter.Composite.allBodies(engines.at(-1)!.world).filter((b) => !b.isStatic);
@@ -108,6 +109,7 @@ beforeEach(() => {
     remove: vi.spyOn(target, "removeEventListener"),
   }));
   resizeCallbacks = [];
+  resizeDisconnects = 0;
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -115,7 +117,9 @@ beforeEach(() => {
         resizeCallbacks.push(callback);
       }
       observe() {}
-      disconnect() {}
+      disconnect() {
+        resizeDisconnects++;
+      }
     },
   );
 });
@@ -128,7 +132,7 @@ describe("PhysicsOverlay", () => {
   it("is one transparent, full-viewport canvas that never takes pointer events", () => {
     const { container } = render(<PhysicsOverlay />);
     const canvas = overlayCanvas(container)!;
-    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(document.body.querySelectorAll("canvas")).toHaveLength(1);
     expect(canvas).toHaveAttribute("aria-hidden", "true");
     expect(canvas).toHaveClass("pointer-events-none", "fixed", "inset-0", "h-full", "w-full");
     expect(canvas.width).toBe(window.innerWidth);
@@ -256,10 +260,10 @@ describe("PhysicsOverlay", () => {
       removeEventListener: () => {},
     }));
     const ref = createRef<PhysicsOverlayHandle>();
-    const { container } = render(<PhysicsOverlay ref={ref} />);
+    render(<PhysicsOverlay ref={ref} />);
     act(() => ref.current!.spawnAt(200, 100));
     advanceFrames(3);
-    expect(container.querySelector("canvas")).toBeNull();
+    expect(document.body.querySelector("canvas")).toBeNull();
     expect(engines).toHaveLength(0);
     expect(frames.size).toBe(0);
     vi.unstubAllGlobals();
@@ -285,6 +289,7 @@ describe("PhysicsOverlay", () => {
       expect(added.length).toBeGreaterThan(0);
       expect(removed).toEqual(expect.arrayContaining(added));
     }
+    expect(resizeDisconnects).toBe(1);
     // A stale handle is harmless and starts nothing.
     handle.spawnAt(10, 10);
     expect(frames.size).toBe(0);

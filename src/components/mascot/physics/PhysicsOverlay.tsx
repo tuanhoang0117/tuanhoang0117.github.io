@@ -1,5 +1,6 @@
 import type Matter from "matter-js";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { createPortal } from "react-dom";
 import { useReducedMotion } from "../../../pixel/useReducedMotion";
 import { rotationStep } from "./raster";
 import { createTokenFrames } from "./tokenFrames";
@@ -150,7 +151,7 @@ export function PhysicsOverlay({
 
   if (reduced) return null;
 
-  return (
+  const canvas = (
     <canvas
       ref={canvasRef}
       aria-hidden="true"
@@ -159,4 +160,5 @@ export function PhysicsOverlay({
       className="pointer-events-none fixed inset-0 z-40 h-full w-full"
     />
   );
+  return typeof document === "undefined" ? canvas : createPortal(canvas, document.body);
 }
