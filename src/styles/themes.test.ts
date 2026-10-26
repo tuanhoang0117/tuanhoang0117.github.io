@@ -137,7 +137,7 @@ describe("tints", () => {
 
 describe("archive accents", () => {
   it("gives each hackathon tint its own accent color", () => {
-    // src/components/archive/tints.ts maps tints to these accent tokens; two tints sharing one
+    // The archived hackathon page's tints.ts (archive/hackathons-page/) maps tints to these accent tokens; two tints sharing one
     // color would make two columns' offset blocks identical.
     const accents = ["glyph-orange", "gold", "poly-bright", "glyph-blue", "glyph-purple"].map(hex);
     expect(new Set(accents).size).toBe(accents.length);

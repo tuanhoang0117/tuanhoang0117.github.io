@@ -5,18 +5,18 @@ Types: [`src/content/types.ts`](../../src/content/types.ts).
 All site copy lives in typed data files under `src/content/`. Pages and components render from
 that data and never hard-code project text.
 
-| File            | Holds                                                                       |
-| --------------- | --------------------------------------------------------------------------- |
-| `site.ts`       | Name, location, time zone, school name, page prompts, socials, nav links    |
-| `mascot.ts`     | The home mascot's visual source (`MascotVisualSource`) and accessible name  |
-| `projects.ts`   | Personal and class projects (`Project[]`), some with a `CaseStudy`          |
-| `hackathons.ts` | Hackathon projects (`Hackathon[]`), which power the archive and event pages |
-| `resume.ts`     | Education, skills, experience, resume projects                              |
+| File            | Holds                                                                           |
+| --------------- | ------------------------------------------------------------------------------- |
+| `site.ts`       | Name, location, time zone, school name, page prompts, socials, nav links        |
+| `mascot.ts`     | The home mascot's visual source (`MascotVisualSource`) and accessible name      |
+| `projects.ts`   | Personal and class projects (`Project[]`), some with a `CaseStudy`              |
+| `hackathons.ts` | Hackathon projects (`Hackathon[]`), shown in the portfolio's Hackathons section |
+| `resume.ts`     | Education, skills, experience, resume projects                                  |
 
 ## Rules
 
-- `slug` is unique per collection and kebab-case. It becomes the URL (`/hackathons/:slug`,
-  `/portfolio/:slug`).
+- `slug` is unique per collection and kebab-case. It becomes the URL (`/portfolio/:slug`;
+  the `/hackathons/:slug` pages are archived in `archive/hackathons-page/`).
 - `placement` is for wins only. An event that didn't win has no `placement`.
 - `mascotVisual` stays `procedural-placeholder` until Tuan supplies approved mustang art. No agent
   generates or downloads horse art. An `image` source's `idleSrc` and `activeSrc` are same-origin

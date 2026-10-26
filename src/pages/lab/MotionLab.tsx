@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import { cardLift } from "../../components/motion/motion";
 import { Stagger } from "../../components/motion/Stagger";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { hackathons } from "../../content/hackathons";
 import { projects } from "../../content/projects";
 import { navLinks } from "../../content/site";
 import { cardShadow, pageThemes } from "../../styles/themes";
@@ -18,16 +17,6 @@ const copy = { replay: "Replay entrances" };
 const sectionLabel = (href: string) => navLinks.find((l) => l.href === href)?.label ?? href;
 
 const demos = [
-  {
-    href: "/hackathons",
-    theme: pageThemes.hackathons,
-    cards: hackathons.map((h) => ({
-      key: h.slug,
-      to: `/hackathons/${h.slug}`,
-      title: h.project,
-      meta: h.event,
-    })),
-  },
   {
     href: "/portfolio",
     theme: pageThemes.portfolio,

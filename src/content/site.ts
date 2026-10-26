@@ -18,7 +18,6 @@ export const school = {
 
 /** The ">>>" line under each page's title. */
 export const pagePrompts = {
-  hackathons: "Every weekend I spent building.",
   portfolio: "Things I've built.",
   resume: "Education, experience, and projects.",
   lab: "Sprite test bench.",
@@ -37,7 +36,6 @@ export const socials: Link[] = [
 ];
 
 export const navLinks: Link[] = [
-  { label: "Hackathons", href: "/hackathons" },
   { label: "Portfolio", href: "/portfolio" },
   { label: "Resume", href: "/resume" },
   { label: "Contact", href: "/contact" },

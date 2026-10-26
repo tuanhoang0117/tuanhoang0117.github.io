@@ -4,8 +4,6 @@ import { checkContrast } from "./helpers/checkContrast";
 
 const routes = [
   { path: "/", h1: "Tuan Hoang" },
-  { path: "/hackathons", h1: "Hackathons" },
-  { path: "/hackathons/oculusmd", h1: "oculusMD" },
   { path: "/portfolio", h1: "Portfolio" },
   { path: "/resume", h1: "Resume" },
   { path: "/contact", h1: "Contact" },
@@ -42,6 +40,12 @@ for (const { path, h1 } of routes) {
       expect(serious.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
     });
 
+    test("links nowhere in the archived hackathons page", async ({ page }) => {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page.locator('a[href^="/hackathons"]')).toHaveCount(0);
+    });
+
     test("checks text contrast on graph paper", async ({ page }) => {
       test.skip(
         path === "/resume",
@@ -76,9 +80,20 @@ test("nav moves between pages", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
 });
 
-test("unknown hackathon slugs show the 404 page", async ({ page }) => {
-  await page.goto("/hackathons/not-a-real-event");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
+// The hackathons page is archived (archive/hackathons-page/), so its URLs fall through to the 404.
+for (const path of ["/hackathons", "/hackathons/oculusmd", "/hackathons/not-a-real-event"]) {
+  test(`${path} shows the 404 page`, async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("404");
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  });
+}
+
+test("the nav has no Hackathons link", async ({ page }) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByRole("link", { name: "Portfolio" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: /hackathons/i })).toHaveCount(0);
 });
 
 test("resume PDF is downloadable", async ({ page, request }) => {
