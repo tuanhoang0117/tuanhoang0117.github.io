@@ -5,14 +5,13 @@ import { projects } from "../../content/projects";
 import type { Project } from "../../content/types";
 import { pageThemes } from "../../styles/themes";
 import { STAGGER_STEP_MS } from "../motion/motion";
-import { projectAccent } from "./accents";
 import { orderProjects } from "./project";
-import { ProjectGrid } from "./ProjectGrid";
+import { GroupProjects, ProjectGrid } from "./ProjectGrid";
 
-function renderGrid(list: readonly Project[] = projects) {
+function renderGrid(list: readonly Project[] = projects, accentStart = 0) {
   return render(
     <MemoryRouter>
-      <ProjectGrid projects={list} />
+      <ProjectGrid projects={list} accentStart={accentStart} heading="h3" />
     </MemoryRouter>,
   );
 }
@@ -28,16 +27,23 @@ const plain: Project = {
   links: [{ label: "Repo link", href: "https://example.com/plain" }],
 };
 
+// The theme's shadow classes, written out independently of accents.ts: the color names the
+// fills and borders must use, in the order cards cycle through them.
+const themeColors = pageThemes.portfolio.shadows.map((s) => s.replace(/^shadow-/, ""));
+const colorAt = (i: number) => themeColors[i % themeColors.length]!;
+
 describe("ProjectGrid", () => {
-  it("renders one card per project, the featured project first", () => {
+  it("renders one card per project, the featured project first, titles at the given level", () => {
     renderGrid();
     const cards = screen.getAllByRole("article");
     expect(cards).toHaveLength(projects.length);
     expect(cards[0]).toHaveAttribute("data-testid", "featured-project");
-    expect(within(cards[0]!).getByRole("heading", { level: 2 })).toHaveTextContent(featured.title);
+    expect(within(cards[0]!).getByRole("heading", { level: 3 })).toHaveTextContent(featured.title);
     expect(screen.getAllByTestId("featured-project")).toHaveLength(1);
     const rest = projects.filter((p) => !p.featured).map((p) => p.title);
-    expect(cards.slice(1).map((c) => within(c).getByRole("heading").textContent)).toEqual(rest);
+    expect(
+      cards.slice(1).map((c) => within(c).getByRole("heading", { level: 3 }).textContent),
+    ).toEqual(rest);
   });
 
   it("the featured card links to the DFG live site and to its case-study page", () => {
@@ -57,26 +63,31 @@ describe("ProjectGrid", () => {
     expect(within(card).getAllByRole("link")).toHaveLength(featured.links.length + 1);
   });
 
-  it("gives every card a large accent block shadow from the Portfolio theme, cycling by position", () => {
-    renderGrid();
-    const shadows = pageThemes.portfolio.shadows;
+  it("gives every card a large accent block shadow from the Portfolio theme, cycling from accentStart", () => {
+    renderGrid(projects, 3);
     const cards = screen.getAllByRole("article");
     for (const [i, card] of cards.entries()) {
-      expect(card).toHaveClass("shadow-block-lg", shadows[i % shadows.length]!);
+      expect(card).toHaveClass("shadow-block-lg", `shadow-${colorAt(3 + i)}`);
     }
-    expect(
-      new Set(cards.map((c) => [...c.classList].find((k) => shadows.includes(k as never)))),
-    ).toHaveLength(Math.min(shadows.length, cards.length));
+    for (let i = 1; i < cards.length; i++) {
+      expect(cards[i]!.className).not.toBe(cards[i - 1]!.className);
+    }
   });
 
-  it("colors each card's strip and stack tags from its theme accent", () => {
-    renderGrid();
+  it("colors each card's strip and stack tags in its theme color", () => {
+    renderGrid(projects, 1);
     for (const [i, card] of screen.getAllByRole("article").entries()) {
-      const accent = projectAccent(i);
-      expect(within(card).getByTestId("card-strip")).toHaveClass(accent.fill);
+      expect(within(card).getByTestId("card-strip")).toHaveClass(`bg-${colorAt(1 + i)}`);
       for (const tag of within(card).getAllByTestId("stack-tag")) {
-        expect(tag).toHaveClass(accent.border);
+        expect(tag).toHaveClass(`border-${colorAt(1 + i)}`);
       }
+    }
+  });
+
+  it("puts the small stack tags on the Portfolio theme's wash", () => {
+    renderGrid([plain]);
+    for (const tag of screen.getAllByTestId("stack-tag")) {
+      expect(tag).toHaveClass(pageThemes.portfolio.wash);
     }
   });
 
@@ -105,6 +116,19 @@ describe("ProjectGrid", () => {
     expect(container.textContent).not.toMatch(/undefined|null|NaN/);
   });
 
+  it("shows a project's period on its strip, unless told not to", () => {
+    const dated = { ...plain, period: "Jan – Feb 2026" };
+    const { unmount } = renderGrid([dated]);
+    expect(screen.getByTestId("card-strip")).toHaveTextContent(dated.period);
+    unmount();
+    render(
+      <MemoryRouter>
+        <GroupProjects projects={[dated]} heading="h4" showPeriod={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("card-strip")).not.toHaveTextContent(dated.period);
+  });
+
   it("renders a project's first image with its alt text when it has images", () => {
     const image = { src: "https://example.com/a.png", alt: "Alt text from test data" };
     renderGrid([
@@ -121,6 +145,12 @@ describe("ProjectGrid", () => {
     expect(featured.images).toEqual([]);
     renderGrid();
     expect(within(screen.getByTestId("featured-project")).queryByRole("img")).toBeNull();
+  });
+
+  it("doesn't stretch cards: the grid aligns them to the top and nothing pushes links down", () => {
+    const { container } = renderGrid();
+    expect(container.firstElementChild).toHaveClass("items-start");
+    expect(container.querySelector(".mt-auto, .flex-1, .h-full")).toBeNull();
   });
 
   describe("entrance", () => {
@@ -142,6 +172,28 @@ describe("ProjectGrid", () => {
         cards.map((_, i) => Math.min(i, 8) * STAGGER_STEP_MS),
       );
     });
+  });
+});
+
+describe("GroupProjects", () => {
+  const renderGroup = (list: Project[]) =>
+    render(
+      <MemoryRouter>
+        <GroupProjects projects={list} heading="h4" />
+      </MemoryRouter>,
+    );
+
+  it("lays two or more projects in two columns, and a lone project across the full width", () => {
+    const { container, unmount } = renderGroup([plain, { ...plain, slug: "b", title: "B" }]);
+    expect(container.firstElementChild).toHaveClass("md:grid-cols-2", "items-start");
+    unmount();
+    const lone = renderGroup([plain]);
+    expect(lone.container.firstElementChild).not.toHaveClass("md:grid-cols-2");
+  });
+
+  it("has no entrance of its own (its timeline node enters)", () => {
+    const { container } = renderGroup([plain]);
+    expect(container.querySelector("[data-stagger]")).toBeNull();
   });
 });
 
