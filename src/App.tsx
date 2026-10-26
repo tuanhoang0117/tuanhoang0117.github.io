@@ -1,8 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { Layout } from "./components/shell/Layout";
 import { Contact } from "./pages/Contact";
-import { HackathonDetail } from "./pages/HackathonDetail";
-import { Hackathons } from "./pages/Hackathons";
 import { Home } from "./pages/Home";
 import { Lab } from "./pages/Lab";
 import { BannerLab } from "./pages/lab/BannerLab";
@@ -29,8 +27,6 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
-        <Route path="hackathons" element={<Hackathons />} />
-        <Route path="hackathons/:slug" element={<HackathonDetail />} />
         <Route path="portfolio" element={<Portfolio />} />
         <Route path="portfolio/:slug" element={<ProjectDetail />} />
         <Route path="resume" element={<Resume />} />
