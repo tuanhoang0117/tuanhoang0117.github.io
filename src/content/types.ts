@@ -55,6 +55,31 @@ export interface CaseStudy {
   pdf?: Link;
 }
 
+/**
+ * A program, club, or team Tuan built projects under. The portfolio shows these as a timeline,
+ * newest first, with the projects built under each nested inside it.
+ */
+export interface Experience {
+  slug: string;
+  organization: string;
+  /** His role there, as it appears on his resume. */
+  role: string;
+  /** The dates as display text, e.g. "May – Aug 2026". */
+  period: string;
+  /** ISO start (`YYYY-MM` or `YYYY-MM-DD`): for `<time dateTime>` and for the newest-first order. */
+  start: string;
+  /** ISO end, same formats. Absent means ongoing. */
+  end?: string;
+  link?: Link;
+  /**
+   * Placeholder for an organization logo. Unused until Tuan supplies one he may show: an image
+   * under `public/`, with alt text. Components render nothing for it while it is absent.
+   */
+  logo?: Image;
+  /** Slugs of the projects built under it, in display order. Each project is under at most one. */
+  projects: string[];
+}
+
 /** A project built at a hackathon. Powers the archive and per-event detail pages. */
 export interface Hackathon {
   slug: string;

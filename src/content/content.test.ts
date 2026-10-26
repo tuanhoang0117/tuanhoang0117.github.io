@@ -3,7 +3,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { experience, projectsOf, projectsOutsideExperience } from "./experience";
 import { hackathons } from "./hackathons";
+import { portfolioSections } from "./portfolio";
 import { projects } from "./projects";
 import { resume } from "./resume";
 import { site, socials } from "./site";
@@ -12,11 +14,13 @@ import type { Image, Link } from "./types";
 const allLinks: Link[] = [
   ...projects.flatMap((p) => p.links),
   ...hackathons.flatMap((h) => h.links),
+  ...experience.flatMap((e) => (e.link ? [e.link] : [])),
   ...socials,
 ];
 const allImages: Image[] = [
   ...projects.flatMap((p) => p.images),
   ...hackathons.flatMap((h) => (h.image ? [h.image] : [])),
+  ...experience.flatMap((e) => (e.logo ? [e.logo] : [])),
 ];
 
 describe("content", () => {
@@ -79,7 +83,9 @@ describe("case studies", () => {
   });
 
   it("no content claims Mailchimp work (Tuan didn't do it)", () => {
-    expect(JSON.stringify({ projects, hackathons, resume, site })).not.toMatch(/mailchimp/i);
+    expect(
+      JSON.stringify({ projects, hackathons, resume, site, experience, portfolioSections }),
+    ).not.toMatch(/mailchimp/i);
   });
 
   it("the Develop for Good project doesn't claim donation-flow work (Tuan didn't do it)", () => {
@@ -131,6 +137,62 @@ function denylistedRuns(text: string, hashes: ReadonlySet<string>): string[] {
   return [...new Set(runs.map(sha256).filter((hash) => hashes.has(hash)))];
 }
 
+describe("experience", () => {
+  const iso = /^\d{4}-\d{2}(-\d{2})?$/;
+
+  it("lists only projects that exist, each under at most one experience", () => {
+    const slugs = new Set(projects.map((p) => p.slug));
+    const listed = experience.flatMap((e) => e.projects);
+    for (const slug of listed) expect(slugs.has(slug), slug).toBe(true);
+    expect(new Set(listed).size).toBe(listed.length);
+  });
+
+  it("every experience has an organization, a role, a period, and a unique kebab-case slug", () => {
+    for (const e of experience) {
+      expect(e.organization.trim(), e.slug).not.toBe("");
+      expect(e.role.trim(), e.slug).not.toBe("");
+      expect(e.period.trim(), e.slug).not.toBe("");
+      expect(e.slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    }
+    expect(new Set(experience.map((e) => e.slug)).size).toBe(experience.length);
+  });
+
+  it("is newest first, with ISO dates and no end before its start", () => {
+    for (const e of experience) {
+      expect(e.start, e.slug).toMatch(iso);
+      if (e.end) {
+        expect(e.end, e.slug).toMatch(iso);
+        expect(e.end >= e.start, `${e.slug} ends before it starts`).toBe(true);
+      }
+    }
+    const starts = experience.map((e) => e.start);
+    expect(starts).toEqual([...starts].sort().reverse());
+  });
+
+  it("splits the projects: those under an experience, and the rest for Projects", () => {
+    const inside = experience.flatMap((e) => projectsOf(e, projects));
+    const outside = projectsOutsideExperience(projects, experience);
+    expect(inside.length + outside.length).toBe(projects.length);
+    expect(inside.filter((p) => outside.includes(p))).toEqual([]);
+    expect(outside.length).toBeGreaterThan(0);
+  });
+
+  it("projectsOutsideExperience leaves out exactly the listed projects", () => {
+    const all = [{ slug: "a" }, { slug: "b" }, { slug: "c" }] as typeof projects;
+    const groups = [{ projects: ["b"] }] as typeof experience;
+    expect(projectsOutsideExperience(all, groups).map((p) => p.slug)).toEqual(["a", "c"]);
+    const group = { projects: ["c", "a"] } as (typeof experience)[number];
+    expect(projectsOf(group, all).map((p) => p.slug)).toEqual(["c", "a"]);
+  });
+
+  it("each portfolio section has a heading and a prompt", () => {
+    for (const [name, s] of Object.entries(portfolioSections)) {
+      expect(s.heading.trim(), name).not.toBe("");
+      expect(s.prompt.trim(), name).not.toBe("");
+    }
+  });
+});
+
 describe("people stay out of public copy", () => {
   const file = "private/name-denylist.txt";
   const names = existsSync(file)
@@ -142,7 +204,7 @@ describe("people stay out of public copy", () => {
 
   it("no content file mentions anyone on the hashed denylist (runs in CI)", () => {
     const found = denylistedRuns(
-      JSON.stringify({ projects, hackathons, resume, site }),
+      JSON.stringify({ projects, hackathons, resume, site, experience, portfolioSections }),
       DENYLIST_HASHES,
     );
     expect(found.map((hash) => hash.slice(0, 8))).toEqual([]);
@@ -165,7 +227,14 @@ describe("people stay out of public copy", () => {
   });
 
   it.skipIf(names.length === 0)("no content file mentions anyone on the private denylist", () => {
-    const everything = JSON.stringify({ projects, hackathons, resume, site }).toLowerCase();
+    const everything = JSON.stringify({
+      projects,
+      hackathons,
+      resume,
+      site,
+      experience,
+      portfolioSections,
+    }).toLowerCase();
     for (const name of names) expect(everything, name).not.toContain(name.toLowerCase());
   });
 });
