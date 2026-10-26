@@ -8,6 +8,7 @@ export const experience: Experience[] = [
     role: "Software Developer",
     period: "Aug 2026 – Present",
     start: "2026-08",
+    link: { label: "Website", href: "https://calpoly.hack4impact.org/" },
     projects: ["cal-poly-food-pantry"],
   },
   {
@@ -17,11 +18,12 @@ export const experience: Experience[] = [
     period: "May – Aug 2026",
     start: "2026-05",
     end: "2026-08",
+    link: { label: "Website", href: "https://www.developforgood.org/" },
     projects: ["tar-syndrome-website"],
   },
   {
     slug: "ucsd-summer-internship-prep",
-    organization: "UC San Diego Summer Internship Prep Program",
+    organization: "UC San Diego Summer Internship Prep Program, Jacobs School of Engineering",
     role: "Student",
     period: "Jul – Aug 2025",
     start: "2025-07",
