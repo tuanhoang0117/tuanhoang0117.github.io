@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../../archive";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource/archivo-black";
