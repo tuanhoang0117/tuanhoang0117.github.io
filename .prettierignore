@@ -4,3 +4,5 @@ playwright-report
 test-results
 package-lock.json
 screenshots
+# Retired code kept for restoring later; no tool runs on it (archive/hackathons-page/README.md).
+archive

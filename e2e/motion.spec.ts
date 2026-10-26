@@ -1,13 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { hackathons } from "../src/content/hackathons";
 import { projects } from "../src/content/projects";
 import { pageThemes } from "../src/styles/themes";
 
 const LAB = "/lab/motion";
-const CARD_COUNT = hackathons.length + projects.length;
+const CARD_COUNT = projects.length;
 // Routes whose content a visitor sees first. Each one's main content must be fully visible.
-const ROUTES = ["/", "/hackathons", "/portfolio", "/resume", "/contact", LAB];
+const ROUTES = ["/", "/portfolio", "/resume", "/contact", LAB];
 
 /** Resolves once every animation on the page has finished (or after `timeout` ms). */
 async function settle(page: Page) {
@@ -178,7 +177,7 @@ test.describe("route transition", () => {
   test("runs on every route change, not only the first", async ({ page }) => {
     await page.goto("/");
     await settle(page);
-    for (const href of ["/hackathons", "/portfolio", "/contact"]) {
+    for (const href of ["/portfolio", "/resume", "/contact"]) {
       const first = await navigateAndCaptureFirstFrame(page, href);
       expect(first.durations, href).toHaveLength(1);
       expect(first.opacity, href).toBeLessThan(0.5);
@@ -306,11 +305,9 @@ test.describe("card entrances on /lab/motion", () => {
     await page.goto(LAB);
     await expect(cards(page)).toHaveCount(CARD_COUNT);
     const log = await animationLog(page);
-    for (const list of ["hackathons", "portfolio"]) {
+    for (const list of ["portfolio"]) {
       const delays = log.filter((a) => a.list === list).map((a) => a.delay);
-      expect(delays, list).toHaveLength(
-        list === "hackathons" ? hackathons.length : projects.length,
-      );
+      expect(delays, list).toHaveLength(projects.length);
       expect(delays[0], list).toBe(0);
       for (const [i, delay] of delays.slice(1).entries()) {
         expect(delay - delays[i]!, list).toBeGreaterThanOrEqual(40);
@@ -422,8 +419,8 @@ test.describe("reduced motion", () => {
     await expect(cards(page)).toHaveCount(CARD_COUNT);
     expect((await hiddenContent(page)).problems).toEqual([]);
 
-    const first = await navigateAndCaptureFirstFrame(page, "/hackathons");
-    expect(first.headings).toEqual(["Hackathons"]);
+    const first = await navigateAndCaptureFirstFrame(page, "/portfolio");
+    expect(first.headings).toEqual(["Portfolio"]);
     expect(first.durations).toEqual([]);
     expect(first.opacity).toBe(1);
     expect(await animationLog(page)).toEqual([]);
@@ -467,8 +464,8 @@ test.describe("card hover and press", () => {
       return last ? { color: last[1], x: Number(last[2]), y: Number(last[3]) } : { value };
     }, target);
 
-  // The hackathon cards take the Hackathons theme's accents in order (cardShadow()).
-  const accents = pageThemes.hackathons.shadows;
+  // The project cards take the Portfolio theme's accents in order (cardShadow()).
+  const accents = pageThemes.portfolio.shadows;
 
   test("hover lifts the card and grows its accent shadow; press pushes it in", async ({ page }) => {
     await page.goto(LAB);
