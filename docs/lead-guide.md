@@ -103,3 +103,13 @@ one PR race for the same `agent/review` check.
 - **Sprint 1:** A usage limit stopped a reviewer mid-review with no status posted. The required
   check kept the PR unmergeable, which is the gate working. Start a fresh reviewer; don't trust a
   partial one.
+- **Sprint 2:** The big one-shot jobs (the portfolio rework, the home page) ran longest, drew the
+  biggest reviews, and surfaced problems late: a blank gap inside a card appeared only after the
+  whole page was built and QA'd. Break work down before dispatching it (Tuan's standing rule). One
+  job is one PR on one theme, roughly 5 to 8 files, a few hundred lines, and about an hour of
+  agent work, with testable criteria written first. Split along the seams: the lead's data and
+  contract change first, then one component per job with its own tests, then the page assembled
+  from merged components, then polish. Show Tuan a first slice (a screenshot) early. Small PRs
+  mean more QA and review rounds and more branch updates, so stack dependent PRs, keep to three
+  agents at a time, and carry verdicts forward when only a `v2` merge changed (Tuan decides each
+  time).

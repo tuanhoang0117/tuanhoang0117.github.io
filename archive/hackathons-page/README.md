@@ -74,12 +74,18 @@ Run these from the repo root, on a branch.
    ```
 
 5. Remove the excludes that keep tools off `archive/`. If other code is still archived under
-   `archive/`, keep them.
-   - `vite.config.ts`: the `archive/**` entry in `test.exclude` and the comment above it. Keep
-     the `vitest/config` import: it types the `test` block.
-   - `.oxlintrc.json`: the `archive/**` entry in `ignorePatterns`.
-   - `.prettierignore`: the `archive` line.
-   - `src/pages/pages.test.ts`: the `archive/ is outside every tool` tests.
-   - `src/styles/index.css`: an `@source not` line for `archive/`, if one was added.
+   `archive/`, keep them. Leave no import behind that nothing uses: `tsc` fails on one.
+   - `vite.config.ts`: remove only the `"archive/**"` item, so the line reads
+     `exclude: [...configDefaults.exclude],`, and remove the comment above it. Keep the
+     `configDefaults` import: the line still uses it.
+   - `.oxlintrc.json`: the `archive/**` entry in `ignorePatterns` (remove the key if it is then
+     empty).
+   - `.prettierignore`: the `archive` line and the comment above it.
+   - `src/pages/pages.test.ts`: remove the whole `archive/ is outside every tool` block, and with
+     it the `// @vitest-environment node` line and the imports only that block used
+     (`execFileSync`, `resolve`, `getFileInfo`, `ts`). Keep `readdirSync`, `readFileSync` and the
+     vitest imports. `git diff refs/tags/archive/hackathons-page -- src/pages/pages.test.ts`
+     shows exactly what was added.
+   - `src/styles/index.css`: the `@source not "../../archive";` line, if one was added.
 
 6. Delete this folder once it is empty, then run `npm run check` and `npm run test:e2e`.
