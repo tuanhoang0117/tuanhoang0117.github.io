@@ -176,7 +176,7 @@ test.describe("route transition", () => {
 
   test("runs on every route change, not only the first", async ({ page }) => {
     await page.goto("/");
-    await settle(page);
+    await settleEntrances(page);
     for (const href of ["/portfolio", "/resume", "/contact"]) {
       const first = await navigateAndCaptureFirstFrame(page, href);
       expect(first.durations, href).toHaveLength(1);
@@ -373,7 +373,7 @@ test.describe("no hidden content", () => {
       page,
     }) => {
       await page.goto(path);
-      await settle(page);
+      await settleEntrances(page);
       const { count, problems } = await hiddenContent(page);
       expect(count).toBeGreaterThan(0);
       expect(problems).toEqual([]);

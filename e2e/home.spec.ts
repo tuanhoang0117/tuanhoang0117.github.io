@@ -71,9 +71,14 @@ test("reduced motion holds the hero still and disables token physics", async ({ 
   await expect(title(page)).toBeVisible();
   await expect(mascot(page).locator("canvas")).toHaveAttribute("data-state", "static");
   await expect(banner(page)).toHaveAttribute("data-copies", "1");
+  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
   await mascot(page).click();
   await expect(overlay(page)).toHaveCount(0);
-  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  // The press feedback is a CSS transition cut to 0.01ms by the reduced-motion rule. It can still
+  // be running for a moment right after the click, so wait for it to end; nothing may loop.
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 1000 })
+    .toBe(0);
 });
 
 test("has no serious accessibility violations", async ({ page }) => {

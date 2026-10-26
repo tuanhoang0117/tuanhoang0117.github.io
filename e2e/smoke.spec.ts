@@ -20,7 +20,7 @@ for (const { path, h1 } of routes) {
   test.describe(`${path}`, () => {
     test("renders its heading inside the shell", async ({ page }) => {
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(h1);
       await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
       await expect(page.getByRole("contentinfo")).toBeVisible();
     });
@@ -42,7 +42,7 @@ for (const { path, h1 } of routes) {
 
     test("links nowhere in the archived hackathons page", async ({ page }) => {
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(h1);
       await expect(page.locator('a[href^="/hackathons"]')).toHaveCount(0);
     });
 
