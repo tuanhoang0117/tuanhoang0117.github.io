@@ -44,9 +44,13 @@ export function HomeHero() {
 
   return (
     <>
+      {/* Below md the banner is a strip along the bottom of the screen, shown until the hero has
+          scrolled away. The hero fills the screen there, so nothing after it starts under the
+          strip on load, and its bottom padding (taller than the h-14 strip) keeps its own content
+          above it. */}
       <section
         ref={heroRef}
-        className="relative mx-auto min-h-150 max-w-6xl overflow-x-clip px-4 pt-8 pb-20 sm:px-8 sm:pt-10 md:pb-12 lg:pt-16"
+        className="relative mx-auto min-h-svh max-w-6xl overflow-x-clip px-4 pt-8 pb-20 sm:px-8 sm:pt-10 md:min-h-150 md:pb-12 lg:pt-16"
       >
         {xl && (
           <div className="pointer-events-none absolute -top-16 right-32 hidden xl:block">
@@ -77,7 +81,7 @@ export function HomeHero() {
         </Stagger>
       </section>
       <PhysicsOverlay ref={physicsRef} />
-      <Banner hideAfter={heroRef} avoidFollowingContent />
+      <Banner hideAfter={heroRef} />
     </>
   );
 }

@@ -74,34 +74,103 @@ test("the fixed banner stays on its edge without covering the hero", async ({ pa
   for (const element of hero) expect(overlap(await box(element), strip)).toBe(0);
 });
 
-for (const width of [320, 375]) {
-  test(`the mobile banner never covers home content at ${width}px`, async ({ page, isMobile }) => {
-    test.skip(!isMobile, "Mobile viewport coverage runs in the mobile project");
-    await page.setViewportSize({ width, height: width === 320 ? 640 : 740 });
-    await page.goto("/");
+/** Visible content in main that the banner's box overlaps, as short HTML snippets. */
+async function coveredByBanner(page: Page) {
+  return banner(page).evaluate((strip) => {
+    const b = strip.getBoundingClientRect();
+    return Array.from(document.querySelectorAll("main :is(img, a, button, h1, h2, p, canvas)"))
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        if (r.width === 0 || r.height === 0 || style.visibility === "hidden") return false;
+        const w = Math.min(r.right, b.right) - Math.max(r.left, b.left);
+        const h = Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top);
+        return w > 0 && h > 0;
+      })
+      .map((el) => el.outerHTML.slice(0, 80));
+  });
+}
 
-    for (const scrollY of [0, 300, 600]) {
-      await page.evaluate((y) => window.scrollTo(0, y), scrollY);
-      await expect(banner(page)).toHaveAttribute("data-state", scrollY === 0 ? "shown" : "hidden");
-      if (scrollY > 0) {
-        await expect(banner(page)).toHaveCSS("opacity", "0");
-        continue;
-      }
+async function expectShownAndClear(page: Page) {
+  await expect(banner(page)).toHaveCSS("opacity", "1");
+  await expect(banner(page)).toHaveCSS("visibility", "visible");
+  expect(await coveredByBanner(page)).toEqual([]);
+}
 
-      const strip = await box(banner(page));
-      const content = page.locator("main h1, main p, main img, main a, main button");
-      for (let i = 0; i < (await content.count()); i += 1) {
-        const element = content.nth(i);
-        if (await element.isVisible()) {
-          expect(
-            overlap(await box(element), strip),
-            `${await element.evaluate((el) => el.outerHTML)}`,
-          ).toBe(0);
-        }
-      }
+for (const width of [320, 375, 390, 430, 768]) {
+  test(`at ${width}px wide the banner shows on load at every height, covering nothing`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, "Phone and tablet coverage runs in the mobile project");
+    for (const height of [640, 740, 812, 844, 932]) {
+      await page.setViewportSize({ width, height });
+      await page.goto("/");
+      await expect(banner(page)).toHaveAttribute(
+        "data-orientation",
+        width < 768 ? "horizontal" : "vertical",
+      );
+      await expectShownAndClear(page);
     }
   });
 }
+
+// Phones tall enough that the page below the hero is shorter than the screen (430x932) can't
+// scroll the hero past, so the strip stays to the end there, where body padding keeps it clear.
+for (const [width, height] of [
+  [320, 640],
+  [375, 812],
+  [390, 844],
+]) {
+  test(`at ${width}x${height} the banner fades once the hero scrolls past, and returns`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, "Phone coverage runs in the mobile project");
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expectShownAndClear(page);
+
+    const heroBottom = await page
+      .locator("main section")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
+    await page.evaluate((y) => window.scrollTo(0, y + 10), heroBottom);
+    await expect(banner(page)).toHaveCSS("opacity", "0");
+    await expect(banner(page)).toHaveCSS("pointer-events", "none");
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expectShownAndClear(page);
+    await expect(banner(page)).toHaveCSS("pointer-events", "auto");
+  });
+}
+
+for (const width of [768, 1024, 1279, 1280, 1440]) {
+  test(`at ${width}px the banner is the right rail and covers nothing`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "Tablet and desktop coverage runs in the desktop project");
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    await expect(banner(page)).toHaveAttribute("data-orientation", "vertical");
+    const strip = await box(banner(page));
+    expect(strip.x + strip.width).toBeCloseTo(width, 0);
+    await expectShownAndClear(page);
+    if (width >= 1280) {
+      const group = await box(page.getByRole("group", { name: mascotLabel }));
+      expect(overlap(group, strip), "mustang group").toBe(0);
+    }
+  });
+}
+
+test("with reduced motion the banner marquee doesn't run", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await expect(banner(page)).toHaveCSS("opacity", "1");
+  await page.waitForTimeout(300);
+  expect(await banner(page).evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
+});
 
 test("the mascot sits directly on the graph paper without a card frame", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
