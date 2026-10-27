@@ -22,16 +22,23 @@ function overlap(a: Box, b: Box) {
   return Math.max(0, width) * Math.max(0, height);
 }
 
-test("assembles the title, tagline, mascot, banner, and intro", async ({ page }) => {
+test("assembles the title, tagline, responsive mascot, banner, and intro", async ({
+  page,
+  isMobile,
+}) => {
   await page.goto("/");
 
   await expect(title(page)).toBeVisible();
   await expect(title(page).locator("[data-shimmer]")).toBeVisible();
   await expect(page.getByText(site.tagline, { exact: true })).toBeVisible();
-  await expect(mascot(page)).toBeVisible();
-  await expect(page.getByRole("group", { name: mascotLabel })).toHaveAccessibleDescription(
-    /Enter or Space/,
-  );
+  if (isMobile) {
+    await expect(mascot(page)).toHaveCount(0);
+  } else {
+    await expect(mascot(page)).toBeVisible();
+    await expect(page.getByRole("group", { name: mascotLabel })).toHaveAccessibleDescription(
+      /Enter or Space/,
+    );
+  }
   await expect(banner(page)).toContainText(school.name);
   await expect(page.getByText(homeIntro.body, { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: homeIntro.workLink })).toHaveAttribute(
@@ -40,7 +47,8 @@ test("assembles the title, tagline, mascot, banner, and intro", async ({ page })
   );
 });
 
-test("clicking or pressing the mascot drops tokens", async ({ page }) => {
+test("clicking or pressing the mascot drops tokens", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The current mascot brief mounts it only at xl and above");
   await page.goto("/");
 
   await mascot(page).click();
@@ -53,8 +61,10 @@ test("clicking or pressing the mascot drops tokens", async ({ page }) => {
 
 test("the fixed banner stays on its edge without covering the hero", async ({ page, isMobile }) => {
   await page.goto("/");
+  await expect(banner(page)).toHaveAttribute("data-state", "shown");
   const strip = await box(banner(page));
-  const hero = [title(page), mascot(page), page.getByText(site.tagline, { exact: true })];
+  const hero = [title(page), page.getByText(site.tagline, { exact: true })];
+  if (!isMobile) hero.push(mascot(page));
 
   if (isMobile) {
     expect(strip.y + strip.height).toBeCloseTo(await page.evaluate(() => innerHeight), 0);
@@ -64,15 +74,71 @@ test("the fixed banner stays on its edge without covering the hero", async ({ pa
   for (const element of hero) expect(overlap(await box(element), strip)).toBe(0);
 });
 
-test("reduced motion holds the hero still and disables token physics", async ({ page }) => {
+for (const width of [320, 375]) {
+  test(`the mobile banner never covers home content at ${width}px`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile viewport coverage runs in the mobile project");
+    await page.setViewportSize({ width, height: width === 320 ? 640 : 740 });
+    await page.goto("/");
+
+    for (const scrollY of [0, 300, 600]) {
+      await page.evaluate((y) => window.scrollTo(0, y), scrollY);
+      await expect(banner(page)).toHaveAttribute("data-state", scrollY === 0 ? "shown" : "hidden");
+      if (scrollY > 0) {
+        await expect(banner(page)).toHaveCSS("opacity", "0");
+        continue;
+      }
+
+      const strip = await box(banner(page));
+      const content = page.locator("main h1, main p, main img, main a, main button");
+      for (let i = 0; i < (await content.count()); i += 1) {
+        const element = content.nth(i);
+        if (await element.isVisible()) {
+          expect(
+            overlap(await box(element), strip),
+            `${await element.evaluate((el) => el.outerHTML)}`,
+          ).toBe(0);
+        }
+      }
+    }
+  });
+}
+
+test("the mascot sits directly on the graph paper without a card frame", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  const frame = page.getByRole("group", { name: mascotLabel });
+  await expect(frame).toHaveCSS("border-top-width", "0px");
+  await expect(frame).toHaveCSS("box-shadow", "none");
+  await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(frame).toHaveCSS("padding-top", "0px");
+});
+
+test("mounts the mascot only at the xl breakpoint", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Breakpoint coverage runs in the desktop project");
+  await page.setViewportSize({ width: 1279, height: 800 });
+  await page.goto("/");
+  await expect(page.locator(`button[aria-label="${mascotLabel}"]`)).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(mascot(page)).toBeVisible();
+});
+
+test("reduced motion holds the hero still and disables token physics", async ({
+  page,
+  isMobile,
+}) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
   await expect(title(page)).toBeVisible();
-  await expect(mascot(page).locator("canvas")).toHaveAttribute("data-state", "static");
   await expect(banner(page)).toHaveAttribute("data-copies", "1");
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
-  await mascot(page).click();
+  if (isMobile) {
+    await expect(mascot(page)).toHaveCount(0);
+  } else {
+    await expect(mascot(page).locator("canvas")).toHaveAttribute("data-state", "static");
+    await mascot(page).click();
+  }
   await expect(overlay(page)).toHaveCount(0);
   // The press feedback is a CSS transition cut to 0.01ms by the reduced-motion rule. It can still
   // be running for a moment right after the click, so wait for it to end; nothing may loop.

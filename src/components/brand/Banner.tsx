@@ -9,6 +9,9 @@ export const BANNER_SPEED = 80;
 /** Tailwind's `md` breakpoint: at and above it the banner is a vertical strip on the right. */
 const VERTICAL_QUERY = "(min-width: 48rem)";
 
+/** Tailwind's `h-14`: the height of the horizontal banner below `md`. */
+const HORIZONTAL_HEIGHT = 56;
+
 /**
  * Space the banner needs, added to <body> while it's mounted so the whole shell (nav, page,
  * footer) sits clear of the strip: 56px at the bottom on phones, 96px on the right from `md` up.
@@ -43,6 +46,8 @@ export interface BannerLoop {
 interface BannerProps {
   /** The banner fades out once this element (the hero) has scrolled above the viewport. */
   hideAfter?: RefObject<Element | null>;
+  /** On phones, hide before content following `hideAfter` can scroll behind the fixed strip. */
+  avoidFollowingContent?: boolean;
   /** Pad <body> so nothing sits under the strip. On by default. */
   reserveSpace?: boolean;
   /** Called whenever the loop is re-measured. Used by the lab page to show the numbers. */
@@ -87,13 +92,56 @@ function useScrolledPast(ref: RefObject<Element | null> | undefined): boolean {
 }
 
 /**
+ * On phones, hide before content after the hero reaches the fixed strip. Body padding protects
+ * only the end of the document; it cannot keep ordinary scrolling content from passing behind a
+ * fixed element midway down the page.
+ */
+function useReachedHorizontalStrip(
+  ref: RefObject<Element | null> | undefined,
+  vertical: boolean,
+  enabled: boolean,
+): boolean {
+  const [reached, setReached] = useState(false);
+
+  useEffect(() => {
+    const el = ref?.current;
+    if (!el || vertical || !enabled) {
+      setReached(false);
+      return;
+    }
+    const update = () =>
+      setReached(el.getBoundingClientRect().bottom <= window.innerHeight - HORIZONTAL_HEIGHT);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [enabled, ref, vertical]);
+
+  return reached;
+}
+
+/**
  * Cal Poly's full name scrolling in a Poly Green strip: down the right edge from `md` up, along
  * the bottom on phones. With reduced motion it's one static copy.
  */
-export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) {
+export function Banner({
+  hideAfter,
+  avoidFollowingContent = false,
+  reserveSpace = true,
+  onLoop,
+}: BannerProps) {
   const reduced = useReducedMotion();
   const vertical = useMediaQuery(VERTICAL_QUERY);
-  const hidden = useScrolledPast(hideAfter);
+  const scrolledPast = useScrolledPast(hideAfter);
+  const reachedHorizontalStrip = useReachedHorizontalStrip(
+    hideAfter,
+    vertical,
+    avoidFollowingContent,
+  );
+  const hidden = scrolledPast || reachedHorizontalStrip;
 
   const stripRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -179,8 +227,8 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
       role="region"
       aria-label={school.shortName}
       className={[
-        "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-300",
-        "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2",
+        "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-0",
+        "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2 md:duration-300",
         hidden ? "pointer-events-none opacity-0" : "opacity-100",
       ].join(" ")}
       style={{ writingMode: vertical ? "vertical-rl" : "horizontal-tb" }}
