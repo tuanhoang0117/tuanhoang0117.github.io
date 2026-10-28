@@ -17,7 +17,9 @@ value or arbitrary `[...]` value in a component is a review blocker.
    `shadow-block-lg`). No `blur-*`, no soft `shadow-md`. Sprites render with `crispEdges`;
    raster pixel art uses `pixelated`.
 3. **Three type voices** (plus one accent):
-   - `font-display` + `text-outline`: giant hollow headings ("PORTFOLIO"). Page titles only.
+   - `font-display`: giant page titles ("PORTFOLIO") with the home title's drifting Cal Poly
+     shimmer (`src/components/brand/shimmer.ts`), via `PageHeader`. Page titles only. The hollow
+     `text-outline` style is retired for page titles.
    - `font-sans`: everything people read.
    - `font-mono` / `label-mono` / `prompt`: system voice, like `CHAPTER 01`, `>>> prompt`, tags.
    - `font-pixel`: tiny accents only (badges, Musty's speech). Never body text.
