@@ -10,9 +10,8 @@ export function Home() {
   }, []);
 
   return (
-    <>
-      <HomeHero />
+    <HomeHero>
       <HomeIntro />
-    </>
+    </HomeHero>
   );
 }

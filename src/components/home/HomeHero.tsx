@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { site } from "../../content/site";
 import { mascotLabel } from "../../content/mascot";
 import { useReducedMotion } from "../../pixel/useReducedMotion";
 import { pageThemes } from "../../styles/themes";
-import { Banner } from "../brand/Banner";
 import { HeroTitle } from "../brand/HeroTitle";
 import { Mascot, type MascotActivation } from "../mascot/Mascot";
 import { PhysicsOverlay, type PhysicsOverlayHandle } from "../mascot/physics/PhysicsOverlay";
@@ -28,13 +27,18 @@ function useXlLayout(): boolean {
   return matches;
 }
 
+interface HomeHeroProps {
+  /** The intro card. From xl it sits beside the mustang, under the title; below xl, under it. */
+  children?: ReactNode;
+}
+
 /**
- * The home hero: the shimmering name and tagline beside the mustang. Pressing the mustang drops a
- * token into the full-window physics layer. The banner and the physics layer portal to <body>,
- * so nothing here may put a transform, filter, or perspective on their ancestors.
+ * The home hero: the shimmering name and tagline, then the intro card. From xl the mustang joins
+ * as its own grid cell beside the intro, so it never overlaps the title, tagline, or card. Pressing
+ * it drops a token into the full-window physics layer, which portals to <body>, so nothing here
+ * may put a transform, filter, or perspective on its ancestors.
  */
-export function HomeHero() {
-  const heroRef = useRef<HTMLElement>(null);
+export function HomeHero({ children }: HomeHeroProps) {
   const physicsRef = useRef<PhysicsOverlayHandle>(null);
   const reduced = useReducedMotion();
   const xl = useXlLayout();
@@ -44,44 +48,36 @@ export function HomeHero() {
 
   return (
     <>
-      {/* Below md the banner is a strip along the bottom of the screen, shown until the hero has
-          scrolled away. The hero fills the screen there, so nothing after it starts under the
-          strip on load, and its bottom padding (taller than the h-14 strip) keeps its own content
-          above it. */}
-      <section
-        ref={heroRef}
-        className="relative mx-auto min-h-svh max-w-6xl overflow-x-clip px-4 pt-8 pb-20 sm:px-8 sm:pt-10 md:min-h-150 md:pb-12 lg:pt-16"
-      >
-        {xl && (
-          <div className="pointer-events-none absolute -top-16 right-32 hidden xl:block">
-            <div
-              role="group"
-              aria-label={mascotLabel}
-              aria-describedby={reduced ? undefined : HINT_ID}
-              className="relative top-24 -left-10 z-0 aspect-square w-150"
-            >
-              {/* Physics is off under reduced motion, so the hint would promise tokens that never fall. */}
-              {!reduced && (
-                <p id={HINT_ID} className="sr-only">
-                  Click or press Enter or Space to drop tokens.
-                </p>
-              )}
-              <Mascot className="pointer-events-auto" onActivate={dropToken} />
-            </div>
-          </div>
-        )}
-
-        <Stagger>
-          <div className="relative z-10 min-w-0 xl:max-w-4xl">
+      <section className="mx-auto max-w-6xl px-4 pt-8 pb-20 sm:px-8 sm:pt-10 lg:pt-16 xl:grid xl:grid-cols-5 xl:items-center xl:gap-12">
+        <Stagger className="min-w-0 xl:col-span-5">
+          <div>
             <HeroTitle />
             <p className={`prompt mt-6 text-base font-semibold sm:text-lg ${theme.accentText}`}>
               {site.tagline}
             </p>
           </div>
         </Stagger>
+
+        <div className="mt-12 min-w-0 xl:col-span-3 xl:mt-0">{children}</div>
+
+        {xl && (
+          <div
+            role="group"
+            aria-label={mascotLabel}
+            aria-describedby={reduced ? undefined : HINT_ID}
+            className="hidden min-w-0 xl:col-span-2 xl:block"
+          >
+            {/* Physics is off under reduced motion, so the hint would promise tokens that never fall. */}
+            {!reduced && (
+              <p id={HINT_ID} className="sr-only">
+                Click or press Enter or Space to drop tokens.
+              </p>
+            )}
+            <Mascot onActivate={dropToken} />
+          </div>
+        )}
       </section>
       <PhysicsOverlay ref={physicsRef} />
-      <Banner hideAfter={heroRef} />
     </>
   );
 }

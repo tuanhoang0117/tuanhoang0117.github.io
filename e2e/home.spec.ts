@@ -16,16 +16,29 @@ async function box(locator: Locator): Promise<Box> {
   return value!;
 }
 
+/** Waits for the card entrances to finish, so layout is measured at rest, not mid-rise. */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
 function overlap(a: Box, b: Box) {
   const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
   const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
   return Math.max(0, width) * Math.max(0, height);
 }
 
-test("assembles the title, tagline, responsive mascot, banner, and intro", async ({
-  page,
-  isMobile,
-}) => {
+test("assembles the title, tagline, responsive mascot, and intro", async ({ page, isMobile }) => {
   await page.goto("/");
 
   await expect(title(page)).toBeVisible();
@@ -39,7 +52,6 @@ test("assembles the title, tagline, responsive mascot, banner, and intro", async
       /Enter or Space/,
     );
   }
-  await expect(banner(page)).toContainText(school.name);
   await expect(page.getByText(homeIntro.body, { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: homeIntro.workLink })).toHaveAttribute(
     "href",
@@ -59,118 +71,129 @@ test("clicking or pressing the mascot drops tokens", async ({ page, isMobile }) 
   await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
 });
 
-test("the fixed banner stays on its edge without covering the hero", async ({ page, isMobile }) => {
-  await page.goto("/");
-  await expect(banner(page)).toHaveAttribute("data-state", "shown");
-  const strip = await box(banner(page));
-  const hero = [title(page), page.getByText(site.tagline, { exact: true })];
-  if (!isMobile) hero.push(mascot(page));
-
-  if (isMobile) {
-    expect(strip.y + strip.height).toBeCloseTo(await page.evaluate(() => innerHeight), 0);
-  } else {
-    expect(strip.x + strip.width).toBeCloseTo(await page.evaluate(() => innerWidth), 0);
-  }
-  for (const element of hero) expect(overlap(await box(element), strip)).toBe(0);
-});
-
-/** Visible content in main that the banner's box overlaps, as short HTML snippets. */
-async function coveredByBanner(page: Page) {
-  return banner(page).evaluate((strip) => {
-    const b = strip.getBoundingClientRect();
-    return Array.from(document.querySelectorAll("main :is(img, a, button, h1, h2, p, canvas)"))
-      .filter((el) => {
-        const r = el.getBoundingClientRect();
-        const style = getComputedStyle(el);
-        if (r.width === 0 || r.height === 0 || style.visibility === "hidden") return false;
-        const w = Math.min(r.right, b.right) - Math.max(r.left, b.left);
-        const h = Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top);
-        return w > 0 && h > 0;
-      })
-      .map((el) => el.outerHTML.slice(0, 80));
-  });
-}
-
-async function expectShownAndClear(page: Page) {
-  await expect(banner(page)).toHaveCSS("opacity", "1");
-  await expect(banner(page)).toHaveCSS("visibility", "visible");
-  expect(await coveredByBanner(page)).toEqual([]);
-}
-
-for (const width of [320, 375, 390, 430, 768]) {
-  test(`at ${width}px wide the banner shows on load at every height, covering nothing`, async ({
-    page,
-    isMobile,
-  }) => {
-    test.skip(!isMobile, "Phone and tablet coverage runs in the mobile project");
-    for (const height of [640, 740, 812, 844, 932]) {
-      await page.setViewportSize({ width, height });
-      await page.goto("/");
-      await expect(banner(page)).toHaveAttribute(
-        "data-orientation",
-        width < 768 ? "horizontal" : "vertical",
-      );
-      await expectShownAndClear(page);
-    }
-  });
-}
-
-// Phones tall enough that the page below the hero is shorter than the screen (430x932) can't
-// scroll the hero past, so the strip stays to the end there, where body padding keeps it clear.
-for (const [width, height] of [
-  [320, 640],
-  [375, 812],
-  [390, 844],
-]) {
-  test(`at ${width}x${height} the banner fades once the hero scrolls past, and returns`, async ({
-    page,
-    isMobile,
-  }) => {
-    test.skip(!isMobile, "Phone coverage runs in the mobile project");
+test("no school banner is on the page, and the body reserves no space for one", async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [320, 640],
+    [375, 812],
+    [768, 1024],
+    [1279, 800],
+    [1280, 800],
+    [1440, 900],
+  ] as const) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    await expectShownAndClear(page);
+    await expect(title(page)).toBeVisible();
+    await expect(banner(page), `${width}px`).toHaveCount(0);
+    await expect(page.getByRole("region", { name: school.shortName }), `${width}px`).toHaveCount(0);
+    await expect(page.getByText(school.name, { exact: true }), `${width}px`).toHaveCount(0);
+    const body = page.locator("body");
+    for (const side of ["top", "right", "bottom", "left"]) {
+      await expect(body, `${width}px body padding-${side}`).toHaveCSS(`padding-${side}`, "0px");
+    }
+  }
+});
 
-    const heroBottom = await page
-      .locator("main section")
-      .first()
-      .evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
-    await page.evaluate((y) => window.scrollTo(0, y + 10), heroBottom);
-    await expect(banner(page)).toHaveCSS("opacity", "0");
-    await expect(banner(page)).toHaveCSS("pointer-events", "none");
-
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expectShownAndClear(page);
-    await expect(banner(page)).toHaveCSS("pointer-events", "auto");
-  });
+/** The hero's pieces, by name, for pairwise overlap checks. */
+async function heroBoxes(page: Page, withMascot: boolean) {
+  const card = page
+    .locator("[data-stagger]")
+    .filter({ has: page.getByRole("link", { name: homeIntro.workLink }) });
+  const boxes: Record<string, Box> = {
+    title: await box(title(page)),
+    tagline: await box(page.getByText(site.tagline, { exact: true })),
+    card: await box(card),
+  };
+  if (withMascot) {
+    const group = page.getByRole("group", { name: mascotLabel });
+    boxes.mustang = await box(group);
+    boxes.canvas = await box(mascot(page).locator("canvas"));
+  }
+  return boxes;
 }
 
-for (const width of [768, 1024, 1279, 1280, 1440]) {
-  test(`at ${width}px the banner is the right rail and covers nothing`, async ({
+/** Every pair of named boxes that overlap, as "a/b: area". The mustang and its own canvas nest. */
+function overlaps(boxes: Record<string, Box>) {
+  const names = Object.keys(boxes);
+  const found: string[] = [];
+  for (const [i, a] of names.entries()) {
+    for (const b of names.slice(i + 1)) {
+      if (a === "mustang" && b === "canvas") continue;
+      const area = overlap(boxes[a]!, boxes[b]!);
+      if (area > 0) found.push(`${a}/${b}: ${Math.round(area)}`);
+    }
+  }
+  return found;
+}
+
+for (const [width, height] of [
+  [1280, 800],
+  [1366, 768],
+  [1440, 900],
+  [1920, 1080],
+] as const) {
+  test(`at ${width}x${height} the title, tagline, button, mustang, and intro never overlap`, async ({
     page,
     isMobile,
   }) => {
-    test.skip(isMobile, "Tablet and desktop coverage runs in the desktop project");
-    await page.setViewportSize({ width, height: 800 });
+    test.skip(isMobile, "Desktop sizes run in the desktop project");
+    await page.setViewportSize({ width, height });
     await page.goto("/");
-    await expect(banner(page)).toHaveAttribute("data-orientation", "vertical");
-    const strip = await box(banner(page));
-    expect(strip.x + strip.width).toBeCloseTo(width, 0);
-    await expectShownAndClear(page);
-    if (width >= 1280) {
-      const group = await box(page.getByRole("group", { name: mascotLabel }));
-      expect(overlap(group, strip), "mustang group").toBe(0);
+    await expect(mascot(page)).toBeVisible();
+    await settleEntrances(page);
+
+    const boxes = await heroBoxes(page, true);
+    expect(overlaps(boxes)).toEqual([]);
+    // "See my work" is the hero's one button. It lives inside the intro card, so it is checked
+    // against everything except the card that holds it.
+    const button = await box(page.getByRole("link", { name: homeIntro.workLink }));
+    for (const name of ["title", "tagline", "mustang", "canvas"]) {
+      expect(overlap(button, boxes[name]!), `button/${name}`).toBe(0);
     }
+    const all = [...Object.values(boxes), button];
+    for (const b of all) {
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(width);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
   });
 }
 
-test("with reduced motion the banner marquee doesn't run", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  await expect(banner(page)).toHaveCSS("opacity", "1");
-  await page.waitForTimeout(300);
-  expect(await banner(page).evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
-});
+for (const [width, height] of [
+  [1279, 800],
+  [1024, 800],
+  [768, 1024],
+  [390, 844],
+  [320, 640],
+] as const) {
+  test(`at ${width}px wide there is no mustang and the hero pieces don't overlap`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(title(page)).toBeVisible();
+    await settleEntrances(page);
+    await expect(page.getByRole("group", { name: mascotLabel })).toHaveCount(0);
+    await expect(mascot(page)).toHaveCount(0);
+
+    const boxes = await heroBoxes(page, false);
+    expect(overlaps(boxes)).toEqual([]);
+    const button = await box(page.getByRole("link", { name: homeIntro.workLink }));
+    for (const name of ["title", "tagline"]) {
+      expect(overlap(button, boxes[name]!), `button/${name}`).toBe(0);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  });
+}
 
 test("the mascot sits directly on the graph paper without a card frame", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -200,7 +223,6 @@ test("reduced motion holds the hero still and disables token physics", async ({
   await page.goto("/");
 
   await expect(title(page)).toBeVisible();
-  await expect(banner(page)).toHaveAttribute("data-copies", "1");
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
   if (isMobile) {
     await expect(mascot(page)).toHaveCount(0);
