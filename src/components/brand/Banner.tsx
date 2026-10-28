@@ -188,7 +188,7 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop, inline = false 
       aria-label={school.shortName}
       className={
         inline
-          ? "flex h-14 items-center overflow-hidden border-y-2 border-ink bg-poly text-white md:h-24"
+          ? "flex h-14 items-center overflow-hidden border-y-2 border-ink bg-poly text-white md:h-16"
           : [
               "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-300",
               "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2",
@@ -204,10 +204,13 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop, inline = false 
             ref={i === 0 ? copyRef : undefined}
             aria-hidden={i > 0 || undefined}
             data-banner-copy=""
-            className="flex shrink-0 items-center gap-6 pe-6 font-serif text-4xl leading-none md:gap-8 md:pe-8 md:text-7xl"
+            className={`flex shrink-0 items-center gap-6 pe-6 font-serif text-4xl leading-none md:gap-8 md:pe-8 ${inline ? "md:text-5xl" : "md:text-7xl"}`}
           >
             <span>{school.name}</span>
-            <span aria-hidden="true" className="text-2xl text-stadium md:text-4xl">
+            <span
+              aria-hidden="true"
+              className={`text-2xl text-stadium ${inline ? "md:text-3xl" : "md:text-4xl"}`}
+            >
               ◆
             </span>
           </span>
