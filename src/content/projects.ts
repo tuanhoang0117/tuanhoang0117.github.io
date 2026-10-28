@@ -140,6 +140,10 @@ export const projects: Project[] = [
     stack: ["Python", "OpenCV", "NumPy"],
     images: [
       {
+        src: "/projects/grid-occupancy.png",
+        alt: 'Webcam frame split into a numbered 6x6 grid, with four cells holding toy figures outlined in red and an "Occupied: 4" count',
+      },
+      {
         src: "https://raw.githubusercontent.com/tuanhoang0117/OpenCV-Crowd-Density/main/OpenCV-Crowd-Density/assets/apparatus.jpg",
         alt: "Webcam and hardware setup for grid occupancy detection",
       },
