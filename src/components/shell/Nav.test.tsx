@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navLinks } from "../../content/site";
 import { MENU_FOCUS_DELAY_MS, MENU_HOVER_CLICK_GRACE_MS, MENU_LEAVE_GRACE_MS, Nav } from "./Nav";
@@ -15,12 +16,30 @@ function stubMedia({ hover = false, reduced = false } = {}) {
   }));
 }
 
-function renderAt(path: string) {
+/** The router's navigate, standing in for the browser's Back and Forward. */
+const history: { go?: NavigateFunction } = {};
+function History() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    history.go = navigate;
+  }, [navigate]);
+  return null;
+}
+
+function renderAt(path: string, entries: string[] = [path]) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={entries} initialIndex={entries.indexOf(path)}>
       <Nav />
+      <History />
       <Routes>
-        <Route path="*" element={<p data-testid="route" />} />
+        <Route
+          path="*"
+          element={
+            <button type="button" data-testid="page-control">
+              page
+            </button>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -103,6 +122,64 @@ describe("Nav", () => {
     keyboardClick(toggle());
     act(() => vi.advanceTimersByTime(MENU_FOCUS_DELAY_MS));
     expect(link(firstLabel)).toHaveFocus();
+  });
+
+  it("leaves focus alone if the user moved it while waiting to focus the first link", () => {
+    vi.useFakeTimers();
+    renderAt("/");
+    toggle().focus();
+    keyboardClick(toggle());
+    act(() => vi.advanceTimersByTime(MENU_FOCUS_DELAY_MS / 2));
+    // A Tab during the wait lands on the second link.
+    const second = link(navLinks[1]!.label);
+    act(() => second.focus());
+    act(() => vi.advanceTimersByTime(MENU_FOCUS_DELAY_MS));
+    expect(second).toHaveFocus();
+    expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("cancels the wait to focus the first link when the menu closes", () => {
+    vi.useFakeTimers();
+    renderAt("/");
+    toggle().focus();
+    keyboardClick(toggle());
+    keyboardClick(toggle());
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
+    act(() => vi.advanceTimersByTime(MENU_FOCUS_DELAY_MS * 2));
+    expect(toggle()).toHaveFocus();
+  });
+
+  it("closes when focus leaves the toggle and panel for the page, without moving it", () => {
+    vi.useFakeTimers();
+    renderAt("/");
+    toggle().focus();
+    keyboardClick(toggle());
+    act(() => vi.advanceTimersByTime(MENU_FOCUS_DELAY_MS));
+    expect(link(firstLabel)).toHaveFocus();
+
+    // Between the links and back to the toggle: still open.
+    act(() => link(navLinks[1]!.label).focus());
+    act(() => toggle().focus());
+    expect(toggle()).toHaveAttribute("aria-expanded", "true");
+
+    const pageControl = screen.getByTestId("page-control");
+    act(() => pageControl.focus());
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
+    expect(pageControl).toHaveFocus();
+  });
+
+  it("closes on Back and stays closed on Forward", () => {
+    renderAt("/resume", ["/", "/resume"]);
+    pointerClick(toggle());
+    expect(toggle()).toHaveAttribute("aria-expanded", "true");
+
+    act(() => void history.go!(-1));
+    expect(link("Home")).toHaveAttribute("aria-current", "page");
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
+
+    act(() => void history.go!(1));
+    expect(link("Resume")).toHaveAttribute("aria-current", "page");
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
   });
 
   it("closes when a link is chosen, after navigating to it", () => {

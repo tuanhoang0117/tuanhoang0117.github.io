@@ -63,6 +63,37 @@ function longestTransition(page: Page) {
   });
 }
 
+/** Opens the menu with Enter and waits for focus to reach the first link. */
+async function openByKeyboard(page: Page) {
+  await toggle(page).focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
+  await expect((await panel(page)).getByRole("link").first()).toBeFocused();
+}
+
+/** Parts of the menu (toggle, dim layer, panel) still showing over the focused element. */
+function menuPartsOverFocus(page: Page) {
+  return page.evaluate(() => {
+    const focused = document.activeElement!;
+    const f = focused.getBoundingClientRect();
+    const navEl = document.querySelector('nav[aria-label="Main"]')!;
+    const toggleEl = navEl.querySelector("button")!;
+    const parts = {
+      toggle: toggleEl,
+      backdrop: navEl.querySelector("[data-menu-backdrop]")!,
+      panel: document.getElementById(toggleEl.getAttribute("aria-controls")!)!,
+    };
+    return Object.entries(parts)
+      .filter(([, el]) => {
+        const cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || Number(cs.opacity) === 0) return false;
+        const r = el.getBoundingClientRect();
+        return r.left < f.right && f.left < r.right && r.top < f.bottom && f.top < r.bottom;
+      })
+      .map(([name]) => `${name} covers ${focused.tagName} "${focused.textContent?.trim()}"`);
+  });
+}
+
 async function seriousViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page }).analyze();
   return violations
@@ -126,6 +157,65 @@ test.describe("menu", () => {
     await expect(toggle(page)).toBeFocused();
     await settle(page);
     await expect(await panel(page)).toBeHidden();
+  });
+
+  for (const path of ["/", "/resume", "/contact"]) {
+    test(`on ${path}, a Tab past the last link closes the menu and the page's focus shows`, async ({
+      page,
+    }) => {
+      await page.goto(path);
+      await openByKeyboard(page);
+      const links = (await panel(page)).getByRole("link");
+      for (let i = 1; i < navLinks.length; i++) {
+        await page.keyboard.press("Tab");
+        await expect(links.nth(i)).toBeFocused();
+        await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
+      }
+
+      await page.keyboard.press("Tab");
+      await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
+      // Focus went on into the page instead of being pulled back to the toggle.
+      const where = await page.evaluate(() => ({
+        inPage: document.activeElement !== document.body,
+        inNav: !!document.activeElement?.closest('nav[aria-label="Main"]'),
+      }));
+      expect(where).toEqual({ inPage: true, inNav: false });
+      await settle(page);
+      expect(await menuPartsOverFocus(page)).toEqual([]);
+    });
+  }
+
+  test("Shift+Tab from the first link to the toggle keeps the menu open", async ({ page }) => {
+    await page.goto("/");
+    await openByKeyboard(page);
+    await page.keyboard.press("Shift+Tab");
+    await expect(toggle(page)).toBeFocused();
+    await page.waitForTimeout(300);
+    await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("going Back closes the menu on the previous page", async ({ page, isMobile }) => {
+    await page.goto("/");
+    await openByPointer(page, isMobile);
+    await settle(page);
+    await (await panel(page)).getByRole("link", { name: "Resume" }).click();
+    await expect(page).toHaveURL("/resume");
+    // The router commits a navigation a moment after the URL changes; wait for the page itself.
+    await expect(page.locator("h1")).toHaveText("Resume");
+
+    // Opened by keyboard, so focus sits on a panel link when Back fires.
+    await openByKeyboard(page);
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+    await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle(page)).toBeFocused();
+    await settle(page);
+    await expect(await panel(page)).toBeHidden();
+
+    await page.goForward();
+    await expect(page).toHaveURL("/resume");
+    await settle(page);
+    await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
   });
 
   test("closes on the X", async ({ page, isMobile }) => {

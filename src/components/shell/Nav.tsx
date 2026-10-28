@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from "react";
-import { NavLink } from "react-router";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type MouseEvent,
+} from "react";
+import { NavLink, useLocation } from "react-router";
 import { navLinks } from "../../content/site";
 import { prefersReducedMotion } from "../motion/motion";
 
@@ -21,10 +30,18 @@ function canHover(): boolean {
 
 /**
  * Site menu: a fixed three-line toggle at the top right that opens a panel of `navLinks` from
- * the right. A disclosure, not a modal: the page stays in place behind a dimmed backdrop.
+ * the right. A disclosure, not a modal: the page stays in place behind a dimmed backdrop, and
+ * focus isn't trapped. Instead the menu closes when focus leaves it, so a Tab past the last link
+ * never lands on something hidden under the panel.
  */
 export function Nav() {
-  const [open, setOpen] = useState(false);
+  // The menu belongs to the page it was opened on, so any navigation closes it, including
+  // browser Back and Forward, not just a menu link.
+  const { key: routeKey } = useLocation();
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === routeKey;
+  // Forget the old page, or going Forward back to it would reopen the menu.
+  if (openOn !== null && !open) setOpenOn(null);
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -38,12 +55,16 @@ export function Nav() {
   const close = useCallback(() => {
     window.clearTimeout(leaveTimer.current);
     hoverOpenedAt.current = null;
-    // The panel turns inert as it closes, so focus inside it would be lost.
-    if (panelRef.current?.contains(document.activeElement)) {
+    setOpenOn(null);
+  }, []);
+
+  // The panel turns inert once closed, so focus left inside it would be lost. This runs before
+  // the browser drops that focus. Focus that already moved out (a Tab into the page) stays put.
+  useLayoutEffect(() => {
+    if (!open && panelRef.current?.contains(document.activeElement)) {
       toggleRef.current?.focus({ preventScroll: true });
     }
-    setOpen(false);
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,8 +79,13 @@ export function Nav() {
 
   useEffect(() => {
     if (!open || !openedByKeyboard.current) return;
+    const focusedAtOpen = document.activeElement;
     const id = window.setTimeout(
-      () => firstLinkRef.current?.focus({ preventScroll: true }),
+      () => {
+        // A Tab or click during the wait already put focus where the user wants it.
+        if (document.activeElement !== focusedAtOpen) return;
+        firstLinkRef.current?.focus({ preventScroll: true });
+      },
       prefersReducedMotion() ? 0 : MENU_FOCUS_DELAY_MS,
     );
     return () => window.clearTimeout(id);
@@ -81,7 +107,7 @@ export function Nav() {
     }
     openedByKeyboard.current = byKeyboard;
     hoverOpenedAt.current = null;
-    setOpen(true);
+    setOpenOn(routeKey);
   };
 
   const onPointerEnter = () => {
@@ -90,8 +116,15 @@ export function Nav() {
     if (!open) {
       openedByKeyboard.current = false;
       hoverOpenedAt.current = Date.now();
-      setOpen(true);
+      setOpenOn(routeKey);
     }
+  };
+
+  // Focus left the toggle and panel for the page, so close. A null relatedTarget (window switch,
+  // click on the backdrop) isn't a move into the page.
+  const onNavBlur = (e: FocusEvent<HTMLElement>) => {
+    const to = e.relatedTarget;
+    if (open && to && !e.currentTarget.contains(to)) close();
   };
 
   const onPointerLeave = () => {
@@ -105,7 +138,7 @@ export function Nav() {
 
   return (
     <header className="fixed top-3 right-3 z-50 sm:top-4 sm:right-4">
-      <nav aria-label="Main">
+      <nav aria-label="Main" onBlur={onNavBlur}>
         <button
           ref={toggleRef}
           type="button"
@@ -122,8 +155,10 @@ export function Nav() {
           <span aria-hidden="true" className={`${line} ${open ? "-rotate-45" : "translate-y-2"}`} />
         </button>
 
-        {/* Clips the parked panel, so it never adds overflow even if an ancestor gains a
-            transform and becomes the containing block for fixed elements. */}
+        {/* Normally a fixed layer can't add page scroll. But when an ancestor gains a transform
+            or filter, this layer is laid out against that ancestor, and without the clip the
+            parked panel would widen the page and zoom a phone out (e2e/banner.spec.ts sets one
+            on #root and fails at 375px without it). */}
         <div className="pointer-events-none fixed inset-0 overflow-clip">
           <div
             aria-hidden="true"
