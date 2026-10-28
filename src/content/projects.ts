@@ -126,8 +126,8 @@ export const projects: Project[] = [
     stack: ["CircuitPython", "Adafruit Metro M4", "Force sensor", "LEDs"],
     images: [
       {
-        src: "https://raw.githubusercontent.com/tuanhoang0117/force-sensor-LEDs/main/force-sensor-leds/assets/forcesensor.jpg",
-        alt: "Force sensor with LED apparatus",
+        src: "/projects/force-sensor.jpg",
+        alt: "Breadboard with a round force sensor and a column of red, yellow, green, blue and white LEDs, wired to an Adafruit Metro board",
       },
     ],
     links: [gh("force-sensor-LEDs")],
@@ -140,12 +140,8 @@ export const projects: Project[] = [
     stack: ["Python", "OpenCV", "NumPy"],
     images: [
       {
-        src: "https://raw.githubusercontent.com/tuanhoang0117/OpenCV-Crowd-Density/main/OpenCV-Crowd-Density/assets/apparatus.jpg",
-        alt: "Webcam and hardware setup for grid occupancy detection",
-      },
-      {
-        src: "https://raw.githubusercontent.com/tuanhoang0117/OpenCV-Crowd-Density/main/OpenCV-Crowd-Density/assets/grid.png",
-        alt: "6x6 grid visualization showing occupied and empty cells",
+        src: "/projects/grid-occupancy.png",
+        alt: 'Webcam frame split into a numbered 6x6 grid, with four cells holding toy figures outlined in red and an "Occupied: 4" count',
       },
     ],
     links: [gh("OpenCV-Crowd-Density")],
