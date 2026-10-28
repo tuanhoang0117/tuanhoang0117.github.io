@@ -35,9 +35,10 @@ Rules for this review were set by Tuan, the product owner. Read `docs/agent-guid
    Pick at least one important test, break the code it covers, confirm it fails, then restore the
    file **from a backup copy** (not `git checkout`). Flag tests that assert nothing meaningful,
    were loosened, or were skipped.
-4. **Everything runs.** Run `npm run check` and `E2E_PORT=<4600 + number> npm run test:e2e`
-   yourself (your own port: other agents run tests in parallel) and confirm CI is green
-   (`scripts/as-bot.sh gh pr checks <number>`).
+4. **Everything runs.** Run `npm run check` and the e2e specs for the changed files
+   (`E2E_PORT=<4600 + number> npx playwright test <specs>`, your own port) and confirm CI, which
+   runs the whole suite, is green (`scripts/as-bot.sh gh pr checks <number>`). On a re-check after
+   a fix, review only the fix commit (docs/agent-workflow.md → How much checking a PR gets).
 5. **Design rules.** Tokens only: no raw hex and no arbitrary Tailwind `[...]` values in
    components. No blurred shadows. Pixel art uses `crispEdges`. No horizontal overflow at 375px.
 6. **Content honesty.** Site copy (bios, prompts, invitations, project text) comes only from

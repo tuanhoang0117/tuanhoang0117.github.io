@@ -19,7 +19,10 @@ You report what you observe. You don't fix code, and you don't judge visual tast
    then `npm ci`. (Not `gh pr checkout`: it fails when the engineer's worktree still has the branch
    checked out.) Note the commit sha: `git rev-parse HEAD`.
 3. `npm run check`
-4. `E2E_PORT=<4400 + PR> npm run test:e2e`. Use your own port; other agents run tests in parallel.
+4. `E2E_PORT=<4400 + PR> npx playwright test <specs for the changed files>`. Use your own port;
+   other agents run tests in parallel. CI runs the whole suite on every push, so don't repeat it;
+   confirm CI is green instead (`scripts/as-bot.sh gh pr checks <PR>`). Read the failure count,
+   not just the last line.
 5. `SCREENSHOT_PORT=<4500 + PR> npm run screenshots -- <routes>`. Include every affected route.
 6. Open each PNG with Read and look at it. Report **objective** problems only: blank or broken
    pages, missing content, text clipped or overflowing, broken images, overlapping elements. Leave

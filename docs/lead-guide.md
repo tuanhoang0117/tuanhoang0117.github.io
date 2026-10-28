@@ -113,3 +113,7 @@ one PR race for the same `agent/review` check.
   mean more QA and review rounds and more branch updates, so stack dependent PRs, keep to three
   agents at a time, and carry verdicts forward when only a `v2` merge changed (Tuan decides each
   time).
+- **Sprint 2:** One home-page PR took six QA rounds and five reviews, mostly re-checking designs
+  that changed afterwards, while QA and the reviewer each re-ran the suite CI already runs. Show
+  Tuan the design before any agent checks it, and size the checks to the risk
+  ([agent-workflow.md → How much checking a PR gets](agent-workflow.md)).
