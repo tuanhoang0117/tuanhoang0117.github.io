@@ -58,6 +58,8 @@ async function recordEntrances(page: Page) {
     const original = Element.prototype.animate;
     Element.prototype.animate = function (keyframes, options) {
       const timing = typeof options === "object" ? options : {};
+      // Endless loops (the page title's shimmer) aren't entrances.
+      if (timing.iterations === Infinity) return original.call(this, keyframes, options);
       const parent = this.parentElement;
       log.push({
         section: this.closest("section")?.dataset.testid ?? this.tagName,
