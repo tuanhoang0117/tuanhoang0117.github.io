@@ -10,7 +10,9 @@ interface PageHeaderProps {
   children?: ReactNode;
 }
 
-const TITLE = "font-display text-display tracking-tight uppercase";
+/** A word wider than the screen (a long project title at 320px) breaks rather than spilling past
+ * the box, where the overlay's clipped gradient can't reach it. */
+const TITLE = "font-display text-display tracking-tight uppercase wrap-break-word";
 
 export function PageHeader({ title, prompt, children }: PageHeaderProps) {
   useEffect(() => {

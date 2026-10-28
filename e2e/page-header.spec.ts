@@ -1,4 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { projects } from "../src/content/projects";
+
+const CASE_STUDY_TITLE = projects.find((p) => p.slug === "tar-syndrome-website")!.title;
 
 // Every page whose title comes from PageHeader.
 const routes = [
@@ -6,6 +9,7 @@ const routes = [
   { path: "/resume", h1: "Resume" },
   { path: "/lab", h1: "Pixel Lab" },
   { path: "/portfolio/remind-app", h1: "Remind App" },
+  { path: "/portfolio/tar-syndrome-website", h1: CASE_STUDY_TITLE },
   { path: "/no-such-page", h1: "404" },
 ];
 
@@ -45,6 +49,17 @@ for (const { path, h1 } of routes) {
       expect(look.clip).toBe("text");
       expect(look.color).toBe("rgba(0, 0, 0, 0)");
       expect(look.running).toBe(1);
+    });
+
+    test("at 320px no title spills past its box, so the gradient covers every letter", async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 320, height: 640 });
+      await page.goto(path);
+      for (const el of [page.getByRole("heading", { level: 1 }), shimmerOf(page)]) {
+        const spill = await el.evaluate((n) => n.scrollWidth - n.clientWidth);
+        expect(spill).toBeLessThanOrEqual(0);
+      }
     });
 
     test("under reduced motion the shimmer is drawn but static", async ({ page }) => {
