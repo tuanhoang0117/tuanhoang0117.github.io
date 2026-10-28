@@ -310,6 +310,8 @@ test.describe("menu", () => {
     await toggle(page).focus();
     await page.keyboard.press("Enter");
     await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
+    // Opened by keyboard, focus still moves to the first link, even with no slide to wait for.
+    await expect((await panel(page)).getByRole("link").first()).toBeFocused();
     // No slide, morph or stagger: every transition is effectively zero, with no delay.
     expect(await longestTransition(page)).toBeLessThanOrEqual(1);
     await expect

@@ -80,15 +80,27 @@ export function Nav() {
   useEffect(() => {
     if (!open || !openedByKeyboard.current) return;
     const focusedAtOpen = document.activeElement;
+    let frame = 0;
+    // The panel only turns visible on the frame after it opens, and a hidden link can't take
+    // focus (with reduced motion the wait is 0ms, so the first try lands too early). Retry for a
+    // few frames until the focus sticks.
+    const tryFocus = (attempts: number) => {
+      // A Tab or click during the wait already put focus where the user wants it.
+      if (document.activeElement !== focusedAtOpen) return;
+      const link = firstLinkRef.current;
+      link?.focus({ preventScroll: true });
+      if (link && document.activeElement !== link && attempts > 0) {
+        frame = window.requestAnimationFrame(() => tryFocus(attempts - 1));
+      }
+    };
     const id = window.setTimeout(
-      () => {
-        // A Tab or click during the wait already put focus where the user wants it.
-        if (document.activeElement !== focusedAtOpen) return;
-        firstLinkRef.current?.focus({ preventScroll: true });
-      },
+      () => tryFocus(10),
       prefersReducedMotion() ? 0 : MENU_FOCUS_DELAY_MS,
     );
-    return () => window.clearTimeout(id);
+    return () => {
+      window.clearTimeout(id);
+      window.cancelAnimationFrame(frame);
+    };
   }, [open]);
 
   useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
