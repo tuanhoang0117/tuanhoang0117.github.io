@@ -230,3 +230,61 @@ describe("Banner", () => {
     expect(document.body).not.toHaveClass("md:pr-24");
   });
 });
+
+describe("Banner inline", () => {
+  it("renders in place inside its parent, not portaled to <body>", () => {
+    const { container } = render(
+      <div data-testid="host">
+        <Banner inline />
+      </div>,
+    );
+    const host = container.querySelector('[data-testid="host"]')!;
+    expect(strip(container).parentElement).toBe(host);
+    expect(strip(container)).not.toHaveClass("fixed");
+  });
+
+  it("adds no padding or background to <body>", () => {
+    const { unmount } = render(<Banner inline />);
+    for (const cls of ["pb-14", "md:pb-0", "md:pr-24", "bg-graph"]) {
+      expect(document.body).not.toHaveClass(cls);
+    }
+    unmount();
+    expect(document.body.className).toBe("");
+  });
+
+  it("stays horizontal even when the md query matches", () => {
+    media.vertical = true;
+    const { container } = render(<Banner inline />);
+    expect(strip(container)).toHaveAttribute("data-orientation", "horizontal");
+    expect(strip(container).style.writingMode).toBe("horizontal-tb");
+    // jsdom reports the vertical sizes when the query matches; the loop still runs along x.
+    const [keyframes] = animate.mock.calls.at(-1)!;
+    expect(keyframes[1]).toEqual({ transform: "translate3d(-360px, 0, 0)" });
+  });
+
+  it("never hides, even after the element passed as hideAfter scrolls away", () => {
+    const hero = createRef<HTMLDivElement>();
+    const { container } = render(
+      <>
+        <div ref={hero} />
+        <Banner inline hideAfter={hero} />
+      </>,
+    );
+    act(() =>
+      observers.forEach((cb) =>
+        cb([{ isIntersecting: false, boundingClientRect: { bottom: -10 } } as never], {} as never),
+      ),
+    );
+    expect(strip(container)).toHaveAttribute("data-state", "shown");
+    expect(strip(container)).not.toHaveAttribute("aria-hidden");
+    expect(strip(container)).not.toHaveClass("opacity-0");
+  });
+
+  it("keeps the school's region label, and screen readers hear the name once", () => {
+    const { container } = render(<Banner inline />);
+    expect(strip(container)).toHaveAttribute("role", "region");
+    expect(strip(container)).toHaveAttribute("aria-label", school.shortName);
+    expect(copiesOf(container).length).toBeGreaterThan(1);
+    expect(heard(container)).toHaveLength(1);
+  });
+});

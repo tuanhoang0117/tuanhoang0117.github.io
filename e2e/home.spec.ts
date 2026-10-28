@@ -1,0 +1,367 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { mascotLabel } from "../src/content/mascot";
+import { homeIntro, school, site } from "../src/content/site";
+
+type Box = { x: number; y: number; width: number; height: number };
+
+const title = (page: Page) => page.getByRole("heading", { level: 1, name: site.name, exact: true });
+const mascot = (page: Page) => page.getByRole("button", { name: mascotLabel, exact: true });
+const banner = (page: Page) => page.getByTestId("school-banner");
+const overlay = (page: Page) => page.getByTestId("physics-overlay");
+const workLink = (page: Page) => page.getByRole("link", { name: homeIntro.workLink });
+/** The intro block: photo, label, about text, and the work link. */
+const intro = (page: Page) => page.locator("[data-stagger]").filter({ has: workLink(page) });
+
+async function box(locator: Locator): Promise<Box> {
+  const value = await locator.boundingBox();
+  expect(value, "element has a layout box").not.toBeNull();
+  return value!;
+}
+
+/** Waits for the entrances to finish, so layout is measured at rest, not mid-rise. */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
+function overlap(a: Box, b: Box) {
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return Math.max(0, width) * Math.max(0, height);
+}
+
+test("assembles the title, tagline, responsive mascot, and intro", async ({ page, isMobile }) => {
+  await page.goto("/");
+
+  await expect(title(page)).toBeVisible();
+  await expect(title(page).locator("[data-shimmer]")).toBeVisible();
+  await expect(page.getByText(site.tagline, { exact: true })).toBeVisible();
+  if (isMobile) {
+    await expect(mascot(page)).toHaveCount(0);
+  } else {
+    await expect(mascot(page)).toBeVisible();
+    await expect(page.getByRole("group", { name: mascotLabel })).toHaveAccessibleDescription(
+      /Enter or Space/,
+    );
+  }
+  await expect(page.getByText(homeIntro.body, { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: homeIntro.workLink })).toHaveAttribute(
+    "href",
+    "/portfolio",
+  );
+});
+
+test("clicking or pressing the mascot drops tokens", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The current mascot brief mounts it only at xl and above");
+  await page.goto("/");
+
+  await mascot(page).click();
+  await expect(overlay(page)).toHaveAttribute("data-tokens", "1");
+  await mascot(page).press("Enter");
+  await expect(overlay(page)).toHaveAttribute("data-tokens", "2");
+  await mascot(page).press("Space");
+  await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
+});
+
+/** The pieces the strip must sit clear of, by name, measured at rest. */
+async function stripNeighbours(page: Page, withMascot: boolean) {
+  const boxes: Record<string, Box> = {
+    title: await box(title(page)),
+    tagline: await box(page.getByText(site.tagline, { exact: true })),
+    intro: await box(intro(page)),
+    photo: await box(intro(page).getByRole("img", { name: site.name, exact: true })),
+    link: await box(workLink(page)),
+  };
+  if (withMascot) {
+    boxes.mustang = await box(page.getByRole("group", { name: mascotLabel }));
+    boxes.canvas = await box(mascot(page).locator("canvas"));
+  }
+  return boxes;
+}
+
+for (const [width, height] of [
+  [320, 640],
+  [375, 812],
+  [768, 1024],
+  [1279, 800],
+  [1280, 800],
+  [1440, 900],
+  [1920, 1080],
+] as const) {
+  test(`at ${width}x${height} the school strip sits in the hero flow between the tagline and the intro`, async ({
+    page,
+    isMobile,
+  }) => {
+    const withMascot = width >= 1280;
+    test.skip(isMobile && withMascot, "Desktop sizes run in the desktop project");
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(title(page)).toBeVisible();
+    await settleEntrances(page);
+
+    const strip = page.getByRole("region", { name: school.shortName, exact: true });
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("data-testid", "school-banner");
+    await expect(strip).toHaveAttribute("data-orientation", "horizontal");
+    await expect(strip).toHaveCSS("position", "static");
+    await expect(strip).toHaveCSS("opacity", "1");
+
+    const body = page.locator("body");
+    for (const side of ["top", "right", "bottom", "left"]) {
+      await expect(body, `body padding-${side}`).toHaveCSS(`padding-${side}`, "0px");
+    }
+
+    const stripBox = await box(strip);
+    const boxes = await stripNeighbours(page, withMascot);
+    for (const [name, other] of Object.entries(boxes)) {
+      expect(overlap(stripBox, other), `strip/${name}`).toBe(0);
+    }
+    const tagline = boxes.tagline!;
+    expect(stripBox.y, "strip below the tagline").toBeGreaterThanOrEqual(
+      tagline.y + tagline.height,
+    );
+    for (const name of withMascot ? ["intro", "mustang"] : ["intro"]) {
+      expect(stripBox.y + stripBox.height, `strip above the ${name}`).toBeLessThanOrEqual(
+        boxes[name]!.y,
+      );
+    }
+    expect(stripBox.x).toBeGreaterThanOrEqual(0);
+    expect(stripBox.x + stripBox.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+
+    // Scrolling moves the strip with the page: same place in the document, still shown.
+    const docTop = () =>
+      strip.evaluate((el) => Math.round(el.getBoundingClientRect().top + window.scrollY));
+    const before = await docTop();
+    await page.evaluate(() => window.scrollBy(0, 400));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    // Long enough for any fade (the fixed banner's is 300ms) to have finished.
+    await page.waitForTimeout(400);
+    expect(await docTop(), "strip keeps its document position").toBe(before);
+    await expect(strip).toHaveCSS("opacity", "1");
+    await expect(strip).toHaveCSS("position", "static");
+    await expect(strip).toHaveAttribute("data-state", "shown");
+    await expect(strip).not.toHaveAttribute("aria-hidden", "true");
+  });
+}
+
+test("under reduced motion the school strip holds still", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const strip = banner(page);
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveAttribute("data-copies", "1");
+  const text = strip.getByText(school.name, { exact: true });
+  const first = await box(text);
+  await page.waitForTimeout(500);
+  const second = await box(text);
+  expect(second.x, "the name does not scroll").toBe(first.x);
+  expect(second.y).toBe(first.y);
+});
+
+/** The hero's pieces, by name, for pairwise overlap checks. */
+async function heroBoxes(page: Page, withMascot: boolean) {
+  const boxes: Record<string, Box> = {
+    title: await box(title(page)),
+    tagline: await box(page.getByText(site.tagline, { exact: true })),
+    intro: await box(intro(page)),
+    strip: await box(banner(page)),
+  };
+  if (withMascot) {
+    const group = page.getByRole("group", { name: mascotLabel });
+    boxes.mustang = await box(group);
+    boxes.canvas = await box(mascot(page).locator("canvas"));
+  }
+  return boxes;
+}
+
+/** Every pair of named boxes that overlap, as "a/b: area". The mustang and its own canvas nest. */
+function overlaps(boxes: Record<string, Box>) {
+  const names = Object.keys(boxes);
+  const found: string[] = [];
+  for (const [i, a] of names.entries()) {
+    for (const b of names.slice(i + 1)) {
+      if (a === "mustang" && b === "canvas") continue;
+      const area = overlap(boxes[a]!, boxes[b]!);
+      if (area > 0) found.push(`${a}/${b}: ${Math.round(area)}`);
+    }
+  }
+  return found;
+}
+
+for (const [width, height] of [
+  [1280, 800],
+  [1366, 768],
+  [1440, 900],
+  [1920, 1080],
+] as const) {
+  test(`at ${width}x${height} the title, tagline, button, mustang, and intro never overlap`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "Desktop sizes run in the desktop project");
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(mascot(page)).toBeVisible();
+    await settleEntrances(page);
+
+    const boxes = await heroBoxes(page, true);
+    expect(overlaps(boxes)).toEqual([]);
+    // "See my work" is the hero's one call to action. It lives inside the intro, so it is checked
+    // against everything except the intro that holds it.
+    const button = await box(page.getByRole("link", { name: homeIntro.workLink }));
+    for (const name of ["title", "tagline", "mustang", "canvas"]) {
+      expect(overlap(button, boxes[name]!), `button/${name}`).toBe(0);
+    }
+    const all = [...Object.values(boxes), button];
+    for (const b of all) {
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(width);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  });
+}
+
+for (const [width, height] of [
+  [1279, 800],
+  [1024, 800],
+  [768, 1024],
+  [390, 844],
+  [320, 640],
+] as const) {
+  test(`at ${width}px wide there is no mustang and the hero pieces don't overlap`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(title(page)).toBeVisible();
+    await settleEntrances(page);
+    await expect(page.getByRole("group", { name: mascotLabel })).toHaveCount(0);
+    await expect(mascot(page)).toHaveCount(0);
+
+    const boxes = await heroBoxes(page, false);
+    expect(overlaps(boxes)).toEqual([]);
+    const button = await box(page.getByRole("link", { name: homeIntro.workLink }));
+    for (const name of ["title", "tagline"]) {
+      expect(overlap(button, boxes[name]!), `button/${name}`).toBe(0);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  });
+}
+
+test("the intro sits open on the graph paper with no card", async ({ page }) => {
+  await page.goto("/");
+  await settleEntrances(page);
+
+  const block = intro(page);
+  await expect(block).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(block).toHaveCSS("box-shadow", "none");
+  for (const side of ["top", "right", "bottom", "left"]) {
+    await expect(block, `intro border-${side}`).toHaveCSS(`border-${side}-width`, "0px");
+  }
+
+  const photo = block.getByRole("img", { name: site.name, exact: true });
+  await expect(photo).toHaveCSS("border-top-width", "2px");
+  await expect(photo).toHaveCSS("box-shadow", "none");
+
+  const link = workLink(page);
+  await expect(link).toHaveCSS("text-decoration-line", "underline");
+  await expect(link).toHaveCSS("border-top-width", "0px");
+  await expect(link).toHaveCSS("box-shadow", "none");
+  await expect(link).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  const label = block.getByText(homeIntro.label, { exact: true });
+  await expect(label).toBeVisible();
+  const body = await box(block.getByText(homeIntro.body, { exact: true }));
+  const labelBox = await box(label);
+  expect(labelBox.y + labelBox.height, "label sits above the about text").toBeLessThanOrEqual(
+    body.y,
+  );
+});
+
+test("the mascot sits directly on the graph paper without a card frame", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  const frame = page.getByRole("group", { name: mascotLabel });
+  await expect(frame).toHaveCSS("border-top-width", "0px");
+  await expect(frame).toHaveCSS("box-shadow", "none");
+  await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(frame).toHaveCSS("padding-top", "0px");
+});
+
+test("mounts the mascot only at the xl breakpoint", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Breakpoint coverage runs in the desktop project");
+  await page.setViewportSize({ width: 1279, height: 800 });
+  await page.goto("/");
+  await expect(page.locator(`button[aria-label="${mascotLabel}"]`)).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(mascot(page)).toBeVisible();
+});
+
+test("reduced motion holds the hero still and disables token physics", async ({
+  page,
+  isMobile,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+
+  await expect(title(page)).toBeVisible();
+  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  if (isMobile) {
+    await expect(mascot(page)).toHaveCount(0);
+  } else {
+    await expect(mascot(page).locator("canvas")).toHaveAttribute("data-state", "static");
+    await mascot(page).click();
+  }
+  await expect(overlay(page)).toHaveCount(0);
+  // The press feedback is a CSS transition cut to 0.01ms by the reduced-motion rule. It can still
+  // be running for a moment right after the click, so wait for it to end; nothing may loop.
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 1000 })
+    .toBe(0);
+});
+
+test("has no serious accessibility violations", async ({ page }) => {
+  await page.goto("/");
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  const serious = violations.filter((violation) =>
+    ["serious", "critical"].includes(violation.impact ?? ""),
+  );
+  expect(serious.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([]);
+});
+
+for (const width of [320, 375]) {
+  test(`has no horizontal overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.goto("/");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  });
+}

@@ -47,6 +47,11 @@ interface BannerProps {
   reserveSpace?: boolean;
   /** Called whenever the loop is re-measured. Used by the lab page to show the numbers. */
   onLoop?: (loop: BannerLoop) => void;
+  /**
+   * Render in place, in the page flow, as a horizontal strip at every width: no portal, no fixed
+   * position, no body padding, never hidden. `hideAfter` and `reserveSpace` are ignored.
+   */
+  inline?: boolean;
 }
 
 function useMediaQuery(query: string): boolean {
@@ -88,12 +93,15 @@ function useScrolledPast(ref: RefObject<Element | null> | undefined): boolean {
 
 /**
  * Cal Poly's full name scrolling in a Poly Green strip: down the right edge from `md` up, along
- * the bottom on phones. With reduced motion it's one static copy.
+ * the bottom on phones, or `inline` as a horizontal strip in the page flow. With reduced motion
+ * it's one static copy.
  */
-export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) {
+export function Banner({ hideAfter, reserveSpace = true, onLoop, inline = false }: BannerProps) {
   const reduced = useReducedMotion();
-  const vertical = useMediaQuery(VERTICAL_QUERY);
-  const hidden = useScrolledPast(hideAfter);
+  const verticalQuery = useMediaQuery(VERTICAL_QUERY);
+  const vertical = !inline && verticalQuery;
+  const hidden = useScrolledPast(inline ? undefined : hideAfter);
+  const reserve = reserveSpace && !inline;
 
   const stripRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -104,10 +112,10 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
   const duration = reduced ? 0 : loopDuration(size.copy);
 
   useEffect(() => {
-    if (!reserveSpace) return;
+    if (!reserve) return;
     document.body.classList.add(...RESERVED_SPACE);
     return () => document.body.classList.remove(...RESERVED_SPACE);
-  }, [reserveSpace]);
+  }, [reserve]);
 
   // Measure one copy and the strip along the scroll axis, again whenever either resizes (the
   // breakpoint flips, or the display font finishes loading).
@@ -178,11 +186,15 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
       aria-hidden={hidden || undefined}
       role="region"
       aria-label={school.shortName}
-      className={[
-        "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-300",
-        "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2",
-        hidden ? "pointer-events-none opacity-0" : "opacity-100",
-      ].join(" ")}
+      className={
+        inline
+          ? "flex h-14 items-center overflow-hidden border-y-2 border-ink bg-poly text-white md:h-16"
+          : [
+              "fixed inset-x-0 bottom-0 z-40 flex h-14 items-center overflow-hidden border-t-2 border-ink bg-poly text-white transition-opacity duration-300",
+              "md:inset-x-auto md:top-0 md:right-0 md:h-dvh md:w-24 md:border-t-0 md:border-l-2",
+              hidden ? "pointer-events-none opacity-0" : "opacity-100",
+            ].join(" ")
+      }
       style={{ writingMode: vertical ? "vertical-rl" : "horizontal-tb" }}
     >
       <div ref={trackRef} className="flex shrink-0 whitespace-nowrap">
@@ -192,10 +204,13 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
             ref={i === 0 ? copyRef : undefined}
             aria-hidden={i > 0 || undefined}
             data-banner-copy=""
-            className="flex shrink-0 items-center gap-6 pe-6 font-serif text-4xl leading-none md:gap-8 md:pe-8 md:text-7xl"
+            className={`flex shrink-0 items-center gap-6 pe-6 font-serif text-4xl leading-none md:gap-8 md:pe-8 ${inline ? "md:text-5xl" : "md:text-7xl"}`}
           >
             <span>{school.name}</span>
-            <span aria-hidden="true" className="text-2xl text-stadium md:text-4xl">
+            <span
+              aria-hidden="true"
+              className={`text-2xl text-stadium ${inline ? "md:text-3xl" : "md:text-4xl"}`}
+            >
               ◆
             </span>
           </span>
@@ -203,5 +218,5 @@ export function Banner({ hideAfter, reserveSpace = true, onLoop }: BannerProps) 
       </div>
     </div>
   );
-  return typeof document === "undefined" ? content : createPortal(content, document.body);
+  return inline || typeof document === "undefined" ? content : createPortal(content, document.body);
 }
