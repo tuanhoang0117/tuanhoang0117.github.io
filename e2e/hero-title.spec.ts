@@ -5,7 +5,8 @@ import { site } from "../src/content/site";
 const lastWord = site.name.slice(site.name.lastIndexOf(" ") + 1);
 const title = (page: Page) =>
   page.getByTestId("hero-title-bench").getByRole("heading", { level: 2 });
-const overlay = (page: Page) => page.locator("[data-shimmer]");
+// The name's own overlay sits inside its heading; a page title's overlay is beside its h1.
+const overlay = (page: Page) => page.locator(":is(h1, h2) [data-shimmer]");
 
 async function open(page: Page) {
   await page.goto("/lab/title");

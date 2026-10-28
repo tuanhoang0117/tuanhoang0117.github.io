@@ -8,15 +8,11 @@ const CARD_COUNT = projects.length;
 // Routes whose content a visitor sees first. Each one's main content must be fully visible.
 const ROUTES = ["/", "/portfolio", "/resume", "/contact", LAB];
 
-/** Resolves once every animation on the page has finished (or after `timeout` ms). */
+/**
+ * Resolves once every animation that ends has finished (or after `timeout` ms). Endless loops,
+ * like the page titles' shimmer, never finish, so they're ignored.
+ */
 async function settle(page: Page) {
-  await expect
-    .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 3000 })
-    .toBe(0);
-}
-
-/** Like `settle`, but ignores endless loops (the banner scrolls forever). */
-async function settleEntrances(page: Page) {
   await expect
     .poll(
       () =>
@@ -115,6 +111,8 @@ async function recordAnimations(page: Page) {
     const original = Element.prototype.animate;
     Element.prototype.animate = function (keyframes, options) {
       const timing = typeof options === "object" ? options : {};
+      // Endless loops (the page titles' shimmer) are decoration, not entrances or transitions.
+      if (timing.iterations === Infinity) return original.call(this, keyframes, options);
       const section = this.closest("section[aria-labelledby]");
       log.push({
         list: this.matches("[data-page-transition]")
@@ -199,12 +197,12 @@ async function reachByRouteChange<T>(
   measure: (el: Element) => T,
 ) {
   await page.goto(target);
-  await settleEntrances(page);
+  await settle(page);
   await page.evaluate(() =>
     document.querySelector<HTMLAnchorElement>('nav[aria-label="Main"] a[href="/resume"]')!.click(),
   );
   await expect(page.getByRole("heading", { level: 1, name: "Resume" })).toBeVisible();
-  await settleEntrances(page);
+  await settle(page);
   await page.evaluate(
     ([selector, source]) => {
       const w = window as unknown as { firstFrame?: unknown };
@@ -234,7 +232,7 @@ async function reachByRouteChange<T>(
   const first = (await page.evaluate(
     () => (window as unknown as { firstFrame: unknown }).firstFrame,
   )) as { animating: boolean; opacity: number; value: T };
-  await settleEntrances(page);
+  await settle(page);
   const settled = await page.locator(selector).evaluate(measure);
   return { first, settled };
 }
