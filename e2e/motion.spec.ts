@@ -581,7 +581,7 @@ test.describe("card hover and press", () => {
 
     // A portfolio card is an article whose main link is inside it.
     await page.goto("/portfolio");
-    await settleEntrances(page);
+    await settle(page);
     await tabTo(page, '[data-testid="project-card"]');
     const article = page.locator('[data-testid="project-card"]:has(:focus-visible)');
     await expect(article).toHaveCount(1);
@@ -608,7 +608,7 @@ test.describe("card hover and press", () => {
     await expect(stack).toHaveCSS("box-shadow", / 6px 6px 0px 0px$/);
 
     await page.goto(`/portfolio/${projects.find((p) => p.caseStudy)!.slug}`);
-    await settleEntrances(page);
+    await settle(page);
     const section = page.locator("main [data-section]").first();
     await section.hover({ position: { x: 4, y: 4 } });
     await expect(section).toHaveCSS("translate", "0px -4px");
