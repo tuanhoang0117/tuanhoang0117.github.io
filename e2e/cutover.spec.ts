@@ -15,7 +15,8 @@ test.describe("old v1 URLs", () => {
     test(`${from} lands on ${to}`, async ({ page }) => {
       await page.goto(from);
       await page.waitForURL((url) => url.pathname === to);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      // Accessible name, not text: the home title holds an aria-hidden shimmer copy of a word.
+      await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(h1);
     });
   }
 });
