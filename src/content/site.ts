@@ -36,6 +36,7 @@ export const socials: Link[] = [
 ];
 
 export const navLinks: Link[] = [
+  { label: "Home", href: "/" },
   { label: "Portfolio", href: "/portfolio" },
   { label: "Resume", href: "/resume" },
   { label: "Contact", href: "/contact" },
