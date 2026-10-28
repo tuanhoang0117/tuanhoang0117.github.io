@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpriteDef } from "../../../pixel/types";
+import { mustyIdle } from "../../../pixel/sprites/musty-idle";
 import { pixelCircle, tokenArt, tokenVisual, type TokenVisual } from "./tokenVisual";
 
 const sprite: SpriteDef = {
@@ -12,16 +13,11 @@ const sprite: SpriteDef = {
 };
 
 describe("tokenVisual", () => {
-  it("defaults to Poly Green and Mustang Gold circles, sized like a 28-44px token", () => {
-    expect(tokenVisual).toMatchObject({
-      kind: "circles",
-      colors: ["var(--color-poly)", "var(--color-gold)"],
-    });
+  it("defaults to little pixel mustangs, sized like a 28-44px token", () => {
+    expect(tokenVisual).toEqual({ kind: "sprite", sprite: mustyIdle, scale: 2 });
     const art = tokenArt(tokenVisual);
-    expect(art.variants.map((v) => v.palette.f)).toEqual([
-      "var(--color-poly)",
-      "var(--color-gold)",
-    ]);
+    expect(art.variants).toHaveLength(mustyIdle.frames.length);
+    expect(art.variants.every((v) => v.palette === mustyIdle.palette)).toBe(true);
     expect(art.radius * 2).toBeGreaterThanOrEqual(28);
     expect(art.radius * 2).toBeLessThanOrEqual(44);
     expect(Number.isInteger(art.scale)).toBe(true);
