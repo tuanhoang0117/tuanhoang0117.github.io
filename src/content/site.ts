@@ -16,6 +16,12 @@ export const school = {
   shortName: "Cal Poly SLO",
 };
 
+export const homeIntro = {
+  label: "About",
+  body: "I'm a computer science student at Cal Poly SLO, originally from Sacramento. I build things at hackathons, play volleyball, and play video games.",
+  workLink: "See my work →",
+};
+
 /** The ">>>" line under each page's title. */
 export const pagePrompts = {
   portfolio: "Things I've built.",
@@ -36,6 +42,7 @@ export const socials: Link[] = [
 ];
 
 export const navLinks: Link[] = [
+  { label: "Home", href: "/" },
   { label: "Portfolio", href: "/portfolio" },
   { label: "Resume", href: "/resume" },
   { label: "Contact", href: "/contact" },

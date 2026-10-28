@@ -20,7 +20,7 @@ for (const { path, h1 } of routes) {
   test.describe(`${path}`, () => {
     test("renders its heading inside the shell", async ({ page }) => {
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(h1);
       await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
       await expect(page.getByRole("contentinfo")).toBeVisible();
     });
@@ -42,7 +42,7 @@ for (const { path, h1 } of routes) {
 
     test("links nowhere in the archived hackathons page", async ({ page }) => {
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(h1);
       await expect(page.locator('a[href^="/hackathons"]')).toHaveCount(0);
     });
 
@@ -75,9 +75,13 @@ test("v1 .html URLs redirect to their v2 routes", async ({ page }) => {
 
 test("nav moves between pages", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Resume" }).click();
+  const nav = page.getByRole("navigation", { name: "Main" });
+  // The links live in the menu panel (e2e/menu.spec.ts covers the menu itself).
+  await nav.getByRole("button", { name: "Open menu" }).click();
+  await nav.getByRole("link", { name: "Resume" }).click();
   await expect(page).toHaveURL("/resume");
-  await expect(page.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("button", { name: "Open menu" }).click();
+  await expect(nav.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
 });
 
 // The hackathons page is archived (archive/hackathons-page/), so its URLs fall through to the 404.
@@ -92,6 +96,7 @@ for (const path of ["/hackathons", "/hackathons/oculusmd", "/hackathons/not-a-re
 test("the nav has no Hackathons link", async ({ page }) => {
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("button", { name: "Open menu" }).click();
   await expect(nav.getByRole("link", { name: "Portfolio" })).toBeVisible();
   await expect(nav.getByRole("link", { name: /hackathons/i })).toHaveCount(0);
 });
