@@ -17,7 +17,9 @@ value or arbitrary `[...]` value in a component is a review blocker.
    `shadow-block-lg`). No `blur-*`, no soft `shadow-md`. Sprites render with `crispEdges`;
    raster pixel art uses `pixelated`.
 3. **Three type voices** (plus one accent):
-   - `font-display` + `text-outline`: giant hollow headings ("PORTFOLIO"). Page titles only.
+   - `font-display`: giant page titles ("PORTFOLIO") with the home title's drifting Cal Poly
+     shimmer (`src/components/brand/shimmer.ts`), via `PageHeader`. Page titles only. The hollow
+     `text-outline` style is retired for page titles.
    - `font-sans`: everything people read.
    - `font-mono` / `label-mono` / `prompt`: system voice, like `CHAPTER 01`, `>>> prompt`, tags.
    - `font-pixel`: tiny accents only (badges, Musty's speech). Never body text.
@@ -89,11 +91,11 @@ nothing waits for a scroll position, and nothing starts hidden in markup or CSS.
 the Web Animations API from [`src/components/motion/`](../src/components/motion/), so the hidden
 starting frame exists only inside a running animation. If it never runs, content is simply there.
 
-| Motion          | What moves                                                                | Duration          | Easing                       |
-| --------------- | ------------------------------------------------------------------------- | ----------------- | ---------------------------- |
-| Route change    | Page content fades in from 0 and rises 8px (`<PageTransition>`)           | 280ms             | `cubic-bezier(0.2, 0, 0, 1)` |
-| Card entrance   | Each card is revealed top to bottom as it rises 8px (`<Stagger>`)         | 240ms, 60ms apart | `cubic-bezier(0.2, 0, 0, 1)` |
-| Hover and press | Lift 2px up-left, shadow one size up; press 2px down-right, one size down | 150ms             | `ease-out`                   |
+| Motion          | What moves                                                               | Duration          | Easing                       |
+| --------------- | ------------------------------------------------------------------------ | ----------------- | ---------------------------- |
+| Route change    | Page content fades in from 0 and rises 8px (`<PageTransition>`)          | 280ms             | `cubic-bezier(0.2, 0, 0, 1)` |
+| Card entrance   | Each card is revealed top to bottom as it rises 8px (`<Stagger>`)        | 240ms, 60ms apart | `cubic-bezier(0.2, 0, 0, 1)` |
+| Hover and press | Float 4px straight up, shadow one size up; press 2px down, one size down | 200ms             | `ease-out`                   |
 
 - **Route change.** Applied once, in the shell (`Layout.tsx`). There's no exit animation: the old
   page is gone in the same frame the new one appears. The first page of a visit doesn't fade; the
@@ -110,7 +112,9 @@ starting frame exists only inside a running animation. If it never runs, content
   shadows aren't cut off.
 - **Hover and press.** Use `cardLift.sm` / `.md` / `.lg` (by resting shadow size) from
   `src/components/motion/motion.ts`, plus any accent shadow color (`cardShadow()`). The size steps
-  keep the accent color. Hover styles apply only on devices that can hover.
+  keep the accent color. Every card uses it. Hover styles apply only with a fine pointer that can
+  hover, so a tap never leaves a card raised; keyboard focus on a card, or on a link inside it,
+  floats it too.
 - **Smooth, not stepped.** These are UI feedback, so they ease smoothly. Sprites still animate in
   frames (rule 4).
 - **Reduced motion.** Under `prefers-reduced-motion: reduce`, no entrance runs and content renders

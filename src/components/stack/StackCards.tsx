@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useSearchParams } from "react-router";
 import type { SkillGroup } from "../../content/types";
 import { cardShadow, pageThemes } from "../../styles/themes";
+import { cardLift } from "../motion";
 import {
   ALL,
   groupSlug,
@@ -72,7 +73,7 @@ function Card({ card, index, focusable }: { card: StackCard; index: number; focu
   return (
     <li
       tabIndex={focusable ? 0 : undefined}
-      className={`relative h-16 w-56 shrink-0 border-2 border-ink bg-card p-2 shadow-block-sm ${cardShadow(theme, index)} motion-safe:transition-transform motion-safe:hover:-translate-x-0.5 motion-safe:hover:-translate-y-0.5`}
+      className={`relative h-16 w-56 shrink-0 border-2 border-ink bg-card p-2 ${cardLift.sm} ${cardShadow(theme, index)}`}
     >
       <p className="label-mono flex items-start gap-1 pr-10 text-ink-muted">
         <GlyphIcon glyph={card.group.glyph} />
@@ -205,7 +206,7 @@ export function StackCards({ groups }: { groups: SkillGroup[] }) {
         onTouchStart={() => setTouching(true)}
         onTouchEnd={() => setTouching(false)}
         onTouchCancel={() => setTouching(false)}
-        className="overflow-x-auto px-1 pt-1 pb-3"
+        className="overflow-x-auto px-2 pt-3 pb-3"
       >
         <div className="flex w-max">
           {Array.from({ length: reduced ? 1 : copies }, (_, copy) => (
