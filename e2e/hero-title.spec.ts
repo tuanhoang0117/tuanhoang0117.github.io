@@ -101,7 +101,7 @@ test.describe("/lab/title", () => {
     await expect(page.getByRole("heading", { name: site.name })).toHaveCount(1);
   });
 
-  test("Hoang shimmers: a gradient clipped to its letters, drifting 7 s each way", async ({
+  test("Hoang shimmers: a gradient clipped to its letters, drifting 3.5 s each way", async ({
     page,
   }) => {
     await open(page);
@@ -116,7 +116,7 @@ test.describe("/lab/title", () => {
         return { duration: t.duration, direction: t.direction, iterations: t.iterations };
       }),
     );
-    expect(timing).toEqual([{ duration: 7000, direction: "alternate", iterations: Infinity }]);
+    expect(timing).toEqual([{ duration: 3500, direction: "alternate", iterations: Infinity }]);
 
     const before = await overlay(page).evaluate((el) => getComputedStyle(el).backgroundPosition);
     await page.waitForTimeout(500);

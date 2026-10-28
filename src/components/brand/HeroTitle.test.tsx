@@ -95,14 +95,14 @@ describe("HeroTitle", () => {
     expect(colors).toEqual(expect.arrayContaining(["surf", "morro", "stadium", "avocado"]));
   });
 
-  it("drifts the shimmer for about 7 s each way, alternating, forever", () => {
+  it("drifts the shimmer for about 3.5 s each way, alternating, forever", () => {
     mockReducedMotion(false);
     const { container } = render(<HeroTitle />);
     expect(anim.animate).toHaveBeenCalledTimes(1);
     expect(anim.animate.mock.contexts[0]).toBe(overlayOf(container));
     expect(anim.animate).toHaveBeenCalledWith(
       [{ backgroundPosition: "10% 20%" }, { backgroundPosition: "70% 80%" }],
-      expect.objectContaining({ duration: 7000, direction: "alternate", iterations: Infinity }),
+      expect.objectContaining({ duration: 3500, direction: "alternate", iterations: Infinity }),
     );
   });
 
