@@ -53,8 +53,9 @@ menu, the banner covering content), so the checks stay but are sized to the risk
    dev server and he confirms the design. Agents never check a design that isn't settled.
 2. **Checks match the risk.** The lead labels each PR's tier in its body:
    - **Low:** docs, icons and assets, copy, config, test-only changes. CI plus Tuan's approval; no
-     agents. The lead posts both agent statuses as `"Not needed: low risk (<why>)"` with a PR
-     comment saying so.
+     agents. Tuan posts both agent statuses himself as an override (see "Overriding a gate"),
+     describing them as `"Override by Tuan: low risk (<why>)"`; the lead hands him the exact
+     commands.
    - **Medium:** one visual component or a contained change. One combined agent reviews the diff,
      makes deliberate breaks and checks the page in a real browser, then posts both statuses.
    - **High:** interaction, keyboard and accessibility, layout across screen sizes, physics,
@@ -64,7 +65,10 @@ menu, the banner covering content), so the checks stay but are sized to the risk
    judgment: the diff, deliberate breaks, and real-browser checks.
 4. **Re-checks cover only what changed.** After a fix, the reviewer reviews the fix commit (and
    QA re-tests only the affected behavior) instead of the whole PR. A v2 merge that leaves the PR's
-   own files unchanged carries the verdicts forward with a disclosure comment (automated by #60).
+   own files unchanged carries the verdicts forward: the lead checks that the PR's files didn't
+   change and hands Tuan the override commands, which he posts. Claude Code's permission guard
+   refuses the lead posting a pass on a commit no agent checked (2026-10-28), so carried and
+   low-risk statuses always come from Tuan's account.
 5. **A cheaper model for QA.** QA is mostly mechanical; it runs on a smaller model. Reviews keep
    the stronger one.
 6. **Split by risk, bundle the rest.** Put a risky piece (like the menu) in its own PR so its
