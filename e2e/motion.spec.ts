@@ -433,6 +433,65 @@ test.describe("reduced motion", () => {
     await card.hover();
     await expect(card).toHaveCSS("translate", "none");
   });
+
+  test("hover and keyboard focus still grow the shadow, instantly, without moving the card", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "touch devices have no hover");
+    await page.goto(LAB);
+    const card = cards(page).first();
+    const rest = (await card.boundingBox())!;
+    await card.hover();
+    await expect(card).toHaveCSS("box-shadow", / 10px 10px 0px 0px$/);
+    expect(await card.boundingBox()).toEqual(rest);
+    // index.css cuts transitions to 0.01ms under reduced motion, so the change is instant.
+    expect(
+      parseFloat(await card.evaluate((el) => getComputedStyle(el).transitionDuration)),
+    ).toBeLessThan(0.001);
+
+    await page.mouse.move(0, 0);
+    await tabTo(page, '[data-testid="motion-card"]');
+    await expect(card).toHaveCSS("box-shadow", / 10px 10px 0px 0px$/);
+    await expect(card).toHaveCSS("translate", "none");
+  });
+});
+
+/** Presses Tab until keyboard focus is on (or inside) an element matching `selector`. */
+async function tabTo(page: Page, selector: string) {
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    if (await page.evaluate((s) => !!document.activeElement?.closest(s), selector)) return;
+  }
+  throw new Error(`Tab never reached ${selector}`);
+}
+
+test.describe("card float on touch", () => {
+  test.skip(({ isMobile }) => !isMobile, "needs touch emulation");
+
+  test("tapping a card doesn't leave it raised", async ({ page }) => {
+    // A focusable, non-link card (a stack card), so the tap focuses it and stays on the page.
+    await page.goto("/resume");
+    await page.getByRole("button", { name: /^pause scrolling$/i }).tap();
+    const card = page
+      .getByRole("region", { name: /skills/i })
+      .getByRole("listitem")
+      .first();
+    // The card's offset from its list: unlike page coordinates, it doesn't change if the page
+    // scrolls or settles, only if the card itself moves.
+    const offset = () =>
+      card.evaluate(
+        (el) => el.getBoundingClientRect().top - el.parentElement!.getBoundingClientRect().top,
+      );
+    const rest = await offset();
+    await card.tap();
+    await expect(card).toBeFocused();
+    // Past the 200ms transition, so a raised state would have landed.
+    await page.waitForTimeout(400);
+    await expect(card).toHaveCSS("translate", "none");
+    await expect(card).toHaveCSS("box-shadow", / 3px 3px 0px 0px$/);
+    expect(await offset()).toBe(rest);
+  });
 });
 
 test.describe("card hover and press", () => {
@@ -467,7 +526,9 @@ test.describe("card hover and press", () => {
   // The project cards take the Portfolio theme's accents in order (cardShadow()).
   const accents = pageThemes.portfolio.shadows;
 
-  test("hover lifts the card and grows its accent shadow; press pushes it in", async ({ page }) => {
+  test("hover floats the card straight up and grows its accent shadow; press pushes it down", async ({
+    page,
+  }) => {
     await page.goto(LAB);
     await settle(page);
     const card = cards(page).first();
@@ -476,15 +537,84 @@ test.describe("card hover and press", () => {
 
     expect(await blockShadow(page, 0)).toEqual({ color, x: 6, y: 6 });
     await expect(card).toHaveCSS("translate", "none");
+    const rest = (await card.boundingBox())!;
 
     await card.hover();
-    await expect(card).toHaveCSS("translate", "-2px -2px");
+    await expect(card).toHaveCSS("translate", "0px -4px");
     await expect.poll(() => blockShadow(page, 0)).toEqual({ color, x: 10, y: 10 });
+    // Once the transition ends, the box sits 4px higher and exactly as far left as at rest.
+    await expect.poll(async () => (await card.boundingBox())!.y).toBe(rest.y - 4);
+    const raised = (await card.boundingBox())!;
+    expect(raised.x).toBe(rest.x);
+    expect(raised.width).toBe(rest.width);
 
     await page.mouse.down();
-    await expect(card).toHaveCSS("translate", "2px 2px");
+    await expect(card).toHaveCSS("translate", "0px 2px");
     await expect.poll(() => blockShadow(page, 0)).toEqual({ color, x: 3, y: 3 });
     // No mouse up: releasing would click the card's link and leave the page.
+  });
+
+  test("the float eases out over 200 to 250ms", async ({ page }) => {
+    await page.goto(LAB);
+    const timing = await cards(page)
+      .first()
+      .evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { duration: parseFloat(s.transitionDuration), easing: s.transitionTimingFunction };
+      });
+    expect(timing.duration).toBeGreaterThanOrEqual(0.2);
+    expect(timing.duration).toBeLessThanOrEqual(0.25);
+    // Tailwind's `ease-out`: a soft deceleration, not steps() and not linear.
+    expect(timing.easing).toBe("cubic-bezier(0, 0, 0.2, 1)");
+  });
+
+  test("keyboard focus floats a link card and a card that contains the focused link", async ({
+    page,
+  }) => {
+    await page.goto(LAB);
+    await settle(page);
+    const card = cards(page).first();
+    await tabTo(page, '[data-testid="motion-card"]');
+    await expect(card).toBeFocused();
+    await expect(card).toHaveCSS("translate", "0px -4px");
+    await expect
+      .poll(() => blockShadow(page, 0))
+      .toEqual({ color: expect.anything(), x: 10, y: 10 });
+
+    // A portfolio card is an article whose main link is inside it.
+    await page.goto("/portfolio");
+    await settleEntrances(page);
+    await tabTo(page, '[data-testid="project-card"]');
+    const article = page.locator('[data-testid="project-card"]:has(:focus-visible)');
+    await expect(article).toHaveCount(1);
+    await expect(article).toHaveCSS("translate", "0px -4px");
+    await expect(article).toHaveCSS("box-shadow", / 14px 14px 0px 0px$/);
+  });
+
+  test("contact, stack and case-study cards float on hover too", async ({ page }) => {
+    await page.goto("/contact");
+    await settle(page);
+    const contact = page.getByTestId("contact-card");
+    await contact.hover({ position: { x: 4, y: 4 } });
+    await expect(contact).toHaveCSS("translate", "0px -4px");
+    await expect(contact).toHaveCSS("box-shadow", / 14px 14px 0px 0px$/);
+
+    await page.goto("/resume");
+    await page.getByRole("button", { name: /^pause scrolling$/i }).click();
+    const stack = page
+      .getByRole("region", { name: /skills/i })
+      .getByRole("listitem")
+      .first();
+    await stack.hover();
+    await expect(stack).toHaveCSS("translate", "0px -4px");
+    await expect(stack).toHaveCSS("box-shadow", / 6px 6px 0px 0px$/);
+
+    await page.goto(`/portfolio/${projects.find((p) => p.caseStudy)!.slug}`);
+    await settleEntrances(page);
+    const section = page.locator("main [data-section]").first();
+    await section.hover({ position: { x: 4, y: 4 } });
+    await expect(section).toHaveCSS("translate", "0px -4px");
+    await expect(section).toHaveCSS("box-shadow", / 14px 14px 0px 0px$/);
   });
 
   test("every card keeps its own accent color when its shadow grows", async ({ page }) => {
