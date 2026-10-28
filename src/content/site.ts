@@ -17,6 +17,7 @@ export const school = {
 };
 
 export const homeIntro = {
+  label: "About",
   body: "I'm a computer science student at Cal Poly SLO, originally from Sacramento. I build things at hackathons, play volleyball, and play video games.",
   workLink: "See my work →",
 };
