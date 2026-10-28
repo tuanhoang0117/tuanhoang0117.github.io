@@ -1,4 +1,36 @@
+# Local-only files (not part of the site)
 DESIGN.md
-IMG_2967.jpg
 photo-tool.html
+IMG_*.jpg
+
+# Dependencies and build output
+node_modules
+dist
+*.local
+
+# Test output
+screenshots
+test-results
+playwright-report
+coverage
+
+# Logs
+*.log
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
 .DS_Store
+
+# Private notes: never commit
+private/
+
+# Local Claude Code instructions; the shared agent rules are in docs/agent-guide.md
+/CLAUDE.md
+
+# Agent worktrees (local, created by Claude Code and scripts/dispatch.sh)
+.claude/worktrees/
+.worktrees/
+.agent-scratch/

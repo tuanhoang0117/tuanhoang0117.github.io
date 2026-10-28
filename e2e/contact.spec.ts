@@ -1,0 +1,242 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+import { site, socials } from "../src/content/site";
+
+const email = site.email;
+// The card's order: Email, LinkedIn, GitHub. Values come from site.ts; only the order is fixed here.
+const order = ["mailto:", "https://www.linkedin.com/", "https://github.com/"];
+const expectedLinks = order.map((prefix) => {
+  const s = socials.find((x) => x.href.startsWith(prefix));
+  if (!s) throw new Error(`socials in site.ts has no link starting with ${prefix}`);
+  return s;
+});
+
+const card = (page: Page) => page.getByRole("main").locator("ul").getByRole("link");
+// The two blocks of the layout: the contact card, then the resume lead-in beside it.
+const blocks = (page: Page) =>
+  page.getByTestId("contact-card").or(page.getByRole("main").getByRole("complementary"));
+
+/**
+ * Waits until the card entrances have finished, so layout is measured where the cards rest, not
+ * mid-rise. Ignores endless loops (the banner scrolls forever).
+ */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+        ),
+      { timeout: 3000 },
+    )
+    .toBe(0);
+}
+
+/** Records every Web Animations call on the page: the element's test id or tag, and its delay. */
+async function recordEntrances(page: Page) {
+  await page.addInitScript(() => {
+    const log: { target: string; delay: number }[] = [];
+    (window as unknown as { entranceLog: typeof log }).entranceLog = log;
+    const original = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      const timing = typeof options === "object" ? options : {};
+      log.push({
+        target: this.getAttribute("data-testid") ?? this.tagName.toLowerCase(),
+        delay: Number(timing.delay ?? 0),
+      });
+      return original.call(this, keyframes, options);
+    };
+  });
+}
+
+const entranceLog = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { entranceLog: { target: string; delay: number }[] }).entranceLog,
+  );
+
+test.describe("/contact", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/contact");
+  });
+
+  test("contact links point at the right addresses, Email then LinkedIn then GitHub", async ({
+    page,
+  }) => {
+    const links = card(page);
+    await expect(links).toHaveCount(socials.length);
+    for (const [i, s] of expectedLinks.entries()) {
+      await expect(links.nth(i)).toHaveAccessibleName(new RegExp(`^${s.label}`));
+      await expect(links.nth(i)).toHaveAttribute("href", s.href);
+    }
+    await expect(page.getByRole("main").getByRole("link", { name: /resume/i })).toHaveAttribute(
+      "href",
+      "/resume",
+    );
+  });
+
+  test("uses the page width at 1280px: card beside the resume lead-in, no empty band above the footer", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await settleEntrances(page);
+    const copy = (await page.getByRole("button", { name: "Copy email" }).boundingBox())!;
+    const resume = (await page
+      .getByRole("main")
+      .getByRole("link", { name: /resume/i })
+      .boundingBox())!;
+    // Same row, resume lead-in to the right of the card (so Tab order matches reading order).
+    expect(resume.x).toBeGreaterThan(copy.x + copy.width);
+    const last = (await card(page).last().boundingBox())!;
+    expect(resume.y).toBeLessThan(last.y + last.height);
+
+    const { gap, bottom } = await page.evaluate(() => {
+      const main = document.querySelector("main")!;
+      const footer = document.querySelector("footer")!;
+      const blocks = [
+        main.querySelector('[data-testid="contact-card"]')!,
+        main.querySelector("aside")!,
+      ];
+      const bottom = Math.max(...blocks.map((el) => el.getBoundingClientRect().bottom));
+      return { bottom, gap: footer.getBoundingClientRect().top - bottom };
+    });
+    expect(bottom).toBeGreaterThan(0);
+    // Section padding (80px) plus the 10px shadow; an empty band would be far larger.
+    expect(gap).toBeLessThanOrEqual(96);
+    expect(gap).toBeGreaterThanOrEqual(0);
+  });
+
+  test("the card and lead-in carry accent block shadows from the Contact theme", async ({
+    page,
+  }) => {
+    const shadows = await blocks(page).evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).boxShadow),
+    );
+    expect(shadows).toHaveLength(2);
+    for (const s of shadows) expect(s).not.toBe("none");
+    expect(new Set(shadows).size).toBe(2);
+  });
+
+  test("the card, then the resume lead-in, enter one after another on load", async ({ page }) => {
+    await recordEntrances(page);
+    await page.goto("/contact");
+    await expect(blocks(page)).toHaveCount(2);
+    // Both blocks are the direct children of one Stagger list, card first.
+    expect(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("main [data-stagger] > *")].map(
+          (el) => el.getAttribute("data-testid") ?? el.tagName.toLowerCase(),
+        ),
+      ),
+    ).toEqual(["contact-card", "aside"]);
+    const log = await entranceLog(page);
+    expect(log).toEqual([
+      { target: "contact-card", delay: 0 },
+      { target: "aside", delay: expect.any(Number) },
+    ]);
+    expect(log[1]!.delay).toBeGreaterThanOrEqual(40);
+    expect(log[1]!.delay).toBeLessThanOrEqual(80);
+  });
+
+  test("under reduced motion, the card and lead-in appear in place with no entrance", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await recordEntrances(page);
+    await page.goto("/contact");
+    await expect(blocks(page)).toHaveCount(2);
+    expect(await entranceLog(page)).toEqual([]);
+    for (const block of await blocks(page).all()) {
+      await expect(block).toBeVisible();
+      await expect(block).toHaveCSS("transform", "none");
+      await expect(block).toHaveCSS("clip-path", "none");
+    }
+  });
+
+  test("Copy email puts the address on the clipboard", async ({ page, context, browserName }) => {
+    test.skip(browserName !== "chromium", "Clipboard permissions are Chromium-only");
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+
+    await page.getByRole("button", { name: "Copy email" }).click();
+
+    await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveText(/copied/i);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(email);
+    await expect(page.getByRole("button", { name: "Copy email" })).toBeVisible({ timeout: 4000 });
+  });
+
+  test("shows the address when the clipboard fails", async ({ page }) => {
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("denied"));
+    });
+
+    await page.getByRole("button", { name: "Copy email" }).click();
+
+    await expect(page.getByRole("button", { name: /couldn't copy/i })).toBeVisible();
+    await expect(page.getByText(email, { exact: true })).toBeVisible();
+  });
+
+  test("a keyboard-only pass reaches every card control with a visible focus ring", async ({
+    page,
+  }) => {
+    const expected = (await page.locator("main").locator("a, button").allTextContents()).map((t) =>
+      t.trim(),
+    );
+    expect(expected).toHaveLength(socials.length + 2);
+    expect(expected[0]).toBe("Copy email");
+
+    // Tab from the top of the page until focus leaves the contact section.
+    const reached: string[] = [];
+    for (let i = 0; i < 30 && reached.length < expected.length; i++) {
+      await page.keyboard.press("Tab");
+      const info = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || !el.closest("main")) return null;
+        const style = getComputedStyle(el);
+        return {
+          text: el.textContent!.trim(),
+          outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
+        };
+      });
+      if (!info) continue;
+      expect(info.outline, `focus ring on "${info.text}"`).toBe(true);
+      reached.push(info.text);
+    }
+
+    expect(reached).toEqual(expected);
+  });
+
+  test("has no serious accessibility violations, idle and after a failed copy", async ({
+    page,
+  }) => {
+    const scan = async () => {
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      return violations
+        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .map((v) => `${v.id}: ${v.help}`);
+    };
+    expect(await scan()).toEqual([]);
+
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("denied"));
+    });
+    await page.getByRole("button", { name: "Copy email" }).click();
+    await expect(page.getByText(email, { exact: true })).toBeVisible();
+    expect(await scan()).toEqual([]);
+  });
+
+  test("has no horizontal overflow, even with the fallback address shown", async ({ page }) => {
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("denied"));
+    });
+    await page.getByRole("button", { name: "Copy email" }).click();
+    await expect(page.getByText(email, { exact: true })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(0);
+  });
+});

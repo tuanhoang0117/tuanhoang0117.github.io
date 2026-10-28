@@ -1,0 +1,39 @@
+name: Task
+description: A unit of work sized for one agent or one person in one sitting.
+labels: ["status: ready"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this exists, and which contracts or docs it builds on.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist. Every item must be testable.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: owns
+    attributes:
+      label: Files owned
+      description: The only files this task may create or change. See docs/agent-guide.md for ownership rules.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests required
+      description: Unit tests, e2e flows, and screenshots this task must include.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Related work this task must not do.
