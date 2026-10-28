@@ -75,9 +75,13 @@ test("v1 .html URLs redirect to their v2 routes", async ({ page }) => {
 
 test("nav moves between pages", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Resume" }).click();
+  const nav = page.getByRole("navigation", { name: "Main" });
+  // The links live in the menu panel (e2e/menu.spec.ts covers the menu itself).
+  await nav.getByRole("button", { name: "Open menu" }).click();
+  await nav.getByRole("link", { name: "Resume" }).click();
   await expect(page).toHaveURL("/resume");
-  await expect(page.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("button", { name: "Open menu" }).click();
+  await expect(nav.getByRole("link", { name: "Resume" })).toHaveAttribute("aria-current", "page");
 });
 
 // The hackathons page is archived (archive/hackathons-page/), so its URLs fall through to the 404.
@@ -92,6 +96,7 @@ for (const path of ["/hackathons", "/hackathons/oculusmd", "/hackathons/not-a-re
 test("the nav has no Hackathons link", async ({ page }) => {
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("button", { name: "Open menu" }).click();
   await expect(nav.getByRole("link", { name: "Portfolio" })).toBeVisible();
   await expect(nav.getByRole("link", { name: /hackathons/i })).toHaveCount(0);
 });

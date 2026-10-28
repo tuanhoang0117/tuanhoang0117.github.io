@@ -178,12 +178,17 @@ test.describe("/lab/banner", () => {
   test("never covers the nav or the page", async ({ page, isMobile }) => {
     await page.goto("/lab/banner");
     const b = await box(banner(page));
-    const nav = await box(page.getByRole("navigation", { name: "Main" }));
-    const header = await box(page.locator("header:has(nav)"));
     const h1 = await box(page.getByRole("heading", { level: 1 }));
     const heroBox = await box(hero(page));
-    expect(overlap(b, nav), "nav").toBe(0);
-    expect(overlap(b, header), "header bar").toBe(0);
+    // The nav is a fixed menu toggle in the top right corner, where the desktop strip runs, so
+    // it must sit on top of the strip: the toggle, not the banner, takes a click at its center.
+    const toggle = page.getByRole("navigation", { name: "Main" }).getByRole("button");
+    const t = await box(toggle);
+    const hit = await page.evaluate(
+      ({ x, y }) => !!document.elementFromPoint(x, y)?.closest('nav[aria-label="Main"]'),
+      { x: t.x + t.width / 2, y: t.y + t.height / 2 },
+    );
+    expect(hit, "nav toggle is above the banner").toBe(true);
     expect(overlap(b, h1), "h1").toBe(0);
     expect(overlap(b, heroBox), "hero").toBe(0);
 

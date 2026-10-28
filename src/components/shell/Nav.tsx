@@ -1,38 +1,193 @@
-import { Link, NavLink } from "react-router";
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from "react";
+import { NavLink } from "react-router";
 import { navLinks } from "../../content/site";
+import { prefersReducedMotion } from "../motion/motion";
 
+/** Moving between the toggle and the panel crosses no gap, but leave/enter fire as two events. */
+export const MENU_LEAVE_GRACE_MS = 200;
+/** A click this soon after a hover opened the menu was meant to open it, so it keeps it open. */
+export const MENU_HOVER_CLICK_GRACE_MS = 400;
+/** Keyboard users get focus on the first link once the panel is on its way in. */
+export const MENU_FOCUS_DELAY_MS = 300;
+/** Link reveal: the first starts after the panel has begun moving, then one step per link. */
+export const MENU_REVEAL_START_MS = 250;
+export const MENU_REVEAL_STEP_MS = 70;
+
+const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+
+function canHover(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia(HOVER_QUERY).matches;
+}
+
+/**
+ * Site menu: a fixed three-line toggle at the top right that opens a panel of `navLinks` from
+ * the right. A disclosure, not a modal: the page stays in place behind a dimmed backdrop.
+ */
 export function Nav() {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const openedByKeyboard = useRef(false);
+  const hoverOpenedAt = useRef<number | null>(null);
+  const leaveTimer = useRef<number | undefined>(undefined);
+
+  const cancelLeave = () => window.clearTimeout(leaveTimer.current);
+
+  const close = useCallback(() => {
+    window.clearTimeout(leaveTimer.current);
+    hoverOpenedAt.current = null;
+    // The panel turns inert as it closes, so focus inside it would be lost.
+    if (panelRef.current?.contains(document.activeElement)) {
+      toggleRef.current?.focus({ preventScroll: true });
+    }
+    setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      close();
+      toggleRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, close]);
+
+  useEffect(() => {
+    if (!open || !openedByKeyboard.current) return;
+    const id = window.setTimeout(
+      () => firstLinkRef.current?.focus({ preventScroll: true }),
+      prefersReducedMotion() ? 0 : MENU_FOCUS_DELAY_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+
+  const onToggleClick = (e: MouseEvent<HTMLButtonElement>) => {
+    // A keyboard-activated click (Enter or Space) has no pointer, so its detail is 0.
+    const byKeyboard = e.detail === 0;
+    if (open) {
+      const hoverAt = hoverOpenedAt.current;
+      if (!byKeyboard && hoverAt !== null && Date.now() - hoverAt < MENU_HOVER_CLICK_GRACE_MS) {
+        hoverOpenedAt.current = null;
+        return;
+      }
+      close();
+      return;
+    }
+    openedByKeyboard.current = byKeyboard;
+    hoverOpenedAt.current = null;
+    setOpen(true);
+  };
+
+  const onPointerEnter = () => {
+    if (!canHover()) return;
+    cancelLeave();
+    if (!open) {
+      openedByKeyboard.current = false;
+      hoverOpenedAt.current = Date.now();
+      setOpen(true);
+    }
+  };
+
+  const onPointerLeave = () => {
+    if (!open || !canHover()) return;
+    cancelLeave();
+    leaveTimer.current = window.setTimeout(close, MENU_LEAVE_GRACE_MS);
+  };
+
+  const reduced = prefersReducedMotion();
+  const line = "absolute top-1/2 left-2.5 -mt-px h-0.5 w-5 bg-ink transition duration-400 ease-out";
+
   return (
-    <header className="border-b-2 border-ink bg-paper">
-      <nav
-        aria-label="Main"
-        className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-8"
-      >
-        <Link
-          to="/"
-          className="border-2 border-ink bg-card px-2 py-1 font-pixel text-sm shadow-block-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+    <header className="fixed top-3 right-3 z-50 sm:top-4 sm:right-4">
+      <nav aria-label="Main">
+        <button
+          ref={toggleRef}
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={open ? "Close menu" : "Open menu"}
+          onClick={onToggleClick}
+          onMouseEnter={onPointerEnter}
+          onMouseLeave={onPointerLeave}
+          className="relative z-20 block size-11 border-2 border-ink bg-card shadow-block-sm"
         >
-          [tuan]
-        </Link>
-        <ul className="flex flex-wrap items-center gap-1 sm:gap-2">
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <NavLink
-                to={link.href}
-                className={({ isActive }) =>
-                  [
-                    "label-mono block border-2 px-3 py-1.5",
-                    isActive
-                      ? "border-ink bg-ink text-paper"
-                      : "border-transparent hover:border-ink",
-                  ].join(" ")
-                }
-              >
-                {link.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+          <span aria-hidden="true" className={`${line} ${open ? "rotate-45" : "-translate-y-2"}`} />
+          <span aria-hidden="true" className={`${line} ${open ? "opacity-0" : "opacity-100"}`} />
+          <span aria-hidden="true" className={`${line} ${open ? "-rotate-45" : "translate-y-2"}`} />
+        </button>
+
+        {/* Clips the parked panel, so it never adds overflow even if an ancestor gains a
+            transform and becomes the containing block for fixed elements. */}
+        <div className="pointer-events-none fixed inset-0 overflow-clip">
+          <div
+            aria-hidden="true"
+            data-menu-backdrop=""
+            onClick={close}
+            className={[
+              "pointer-events-auto absolute inset-0 bg-ink/40 transition-all duration-550",
+              open ? "visible opacity-100 ease-out" : "invisible opacity-0 ease-in",
+            ].join(" ")}
+          />
+
+          <div
+            ref={panelRef}
+            id={panelId}
+            inert={!open}
+            data-state={open ? "open" : "closed"}
+            onMouseEnter={onPointerEnter}
+            onMouseLeave={onPointerLeave}
+            className={[
+              "pointer-events-auto absolute inset-y-0 right-0 flex w-5/6 max-w-4xl flex-col justify-center overflow-y-auto bg-ink px-6 py-20 transition-all duration-550 sm:w-2/3 sm:px-12",
+              open ? "visible translate-x-0 ease-out" : "invisible translate-x-full ease-in",
+            ].join(" ")}
+          >
+            <ul className="border-t border-seal">
+              {navLinks.map((link, i) => (
+                <li key={link.href} className="border-b border-seal">
+                  <NavLink
+                    ref={i === 0 ? firstLinkRef : undefined}
+                    to={link.href}
+                    end={link.href === "/"}
+                    onClick={close}
+                    className={({ isActive }) =>
+                      [
+                        "block py-3 text-right font-display text-3xl leading-none uppercase sm:py-4 sm:text-5xl lg:text-7xl",
+                        isActive
+                          ? "text-canyon"
+                          : "text-kennedy hover:text-canyon focus-visible:text-canyon",
+                      ].join(" ")
+                    }
+                  >
+                    {/* The mask: the label slides up into view from just below this box. */}
+                    <span className="block overflow-hidden">
+                      <span
+                        data-menu-label=""
+                        className={[
+                          "block transition-transform duration-500",
+                          open ? "translate-y-0 ease-out" : "translate-y-full ease-in",
+                        ].join(" ")}
+                        style={{
+                          transitionDelay:
+                            open && !reduced
+                              ? `${MENU_REVEAL_START_MS + i * MENU_REVEAL_STEP_MS}ms`
+                              : "0ms",
+                        }}
+                      >
+                        {link.label}
+                      </span>
+                    </span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </nav>
     </header>
   );
