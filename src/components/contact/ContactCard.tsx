@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { contact, site } from "../../content/site";
-import { Stagger } from "../motion";
+import { cardLift, Stagger } from "../motion";
 import { ContactIcon } from "./ContactIcon";
 import { CopyEmailButton } from "./CopyEmailButton";
 import { cardShadow, pageThemes } from "../../styles/themes";
@@ -17,7 +17,7 @@ export function ContactCard() {
     <Stagger className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-12">
       <div
         data-testid="contact-card"
-        className={`border-2 border-ink bg-card p-6 shadow-block-lg sm:p-8 lg:col-span-7 lg:p-12 ${cardShadow(pageThemes.contact, 0)}`}
+        className={`border-2 border-ink bg-card p-6 sm:p-8 lg:col-span-7 lg:p-12 ${cardLift.lg} ${cardShadow(pageThemes.contact, 0)}`}
       >
         <h1 className="font-display text-outline text-5xl tracking-tight uppercase">
           {contactNav.label}
@@ -41,7 +41,7 @@ export function ContactCard() {
               <li key={s.href}>
                 <a
                   href={s.href}
-                  className="relative flex w-full items-center justify-center border-2 border-ink bg-card px-4 py-3 font-sans text-sm font-semibold shadow-block-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                  className={`relative flex w-full items-center justify-center border-2 border-ink bg-card px-4 py-3 font-sans text-sm font-semibold ${cardLift.sm}`}
                   {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
                 >
                   <span className="absolute left-4">
@@ -57,12 +57,12 @@ export function ContactCard() {
       </div>
 
       <aside
-        className={`flex flex-col justify-center gap-6 border-2 border-ink p-6 shadow-block-lg sm:p-8 lg:col-span-5 lg:p-12 ${pageThemes.contact.wash} ${cardShadow(pageThemes.contact, 1)}`}
+        className={`flex flex-col justify-center gap-6 border-2 border-ink p-6 sm:p-8 lg:col-span-5 lg:p-12 ${cardLift.lg} ${pageThemes.contact.wash} ${cardShadow(pageThemes.contact, 1)}`}
       >
         <p className="text-2xl font-semibold sm:text-3xl">{contact.resumeLead}</p>
         <Link
           to={resumeNav.href}
-          className="self-start border-2 border-ink bg-card px-5 py-3 font-semibold shadow-block-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+          className={`self-start border-2 border-ink bg-card px-5 py-3 font-semibold ${cardLift.sm}`}
         >
           {resumeNav.label} →
         </Link>
