@@ -1,4 +1,5 @@
 import type { Frame, Palette, SpriteDef } from "../../../pixel/types";
+import { mustyIdle } from "../../../pixel/sprites/musty-idle";
 import { pixelsOf } from "../../../pixel/validate";
 
 /**
@@ -14,12 +15,8 @@ export type TokenVisual =
   | { kind: "circles"; colors: readonly string[]; pixels: number; scale: number }
   | { kind: "sprite"; sprite: SpriteDef; scale: number };
 
-export const tokenVisual: TokenVisual = {
-  kind: "circles",
-  colors: ["var(--color-poly)", "var(--color-gold)"],
-  pixels: 9,
-  scale: 4,
-};
+/** Tokens are little pixel mustangs (owner request, 2026-10-27). They cycle Musty's idle frames. */
+export const tokenVisual: TokenVisual = { kind: "sprite", sprite: mustyIdle, scale: 2 };
 
 /** One drawable look for a token: a pixel frame and its palette. */
 export interface TokenVariant {

@@ -128,6 +128,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The original circle tokens: these tests check drawing mechanics, not the default look. */
+const CIRCLES: TokenVisual = {
+  kind: "circles",
+  colors: ["var(--color-poly)", "var(--color-gold)"],
+  pixels: 9,
+  scale: 4,
+};
+
 describe("PhysicsOverlay", () => {
   it("is one transparent, full-viewport canvas that never takes pointer events", () => {
     const { container } = render(<PhysicsOverlay />);
@@ -141,7 +149,7 @@ describe("PhysicsOverlay", () => {
 
   it("spawnAt adds a body and draws it pixel-crisp", () => {
     const ref = createRef<PhysicsOverlayHandle>();
-    const { container } = render(<PhysicsOverlay ref={ref} />);
+    const { container } = render(<PhysicsOverlay ref={ref} visual={CIRCLES} />);
     expect(engines).toHaveLength(1);
 
     act(() => ref.current!.spawnAt(200, 100));
@@ -152,7 +160,7 @@ describe("PhysicsOverlay", () => {
     const main = mainContext(container);
     expect(main.draws.length).toBeGreaterThan(0);
     expect(new Set(main.smoothingAtDraw)).toEqual(new Set([false]));
-    // Default circles: 9 art pixels at 4x = 36px, padded to 52px so any rotation fits. Each draw
+    // Circles: 9 art pixels at 4x = 36px, padded to 52px so any rotation fits. Each draw
     // is a plain copy (no scaling) at whole-pixel coordinates.
     expect(tokenSources()).toEqual([
       [0, 0, 36, 36],
@@ -168,7 +176,7 @@ describe("PhysicsOverlay", () => {
   it("covers each art pixel with a whole number of device pixels at fractional ratios", () => {
     vi.spyOn(window, "devicePixelRatio", "get").mockReturnValue(2.625);
     const ref = createRef<PhysicsOverlayHandle>();
-    const { container } = render(<PhysicsOverlay ref={ref} />);
+    const { container } = render(<PhysicsOverlay ref={ref} visual={CIRCLES} />);
     expect(overlayCanvas(container)!.width).toBe(Math.round(window.innerWidth * 2.625));
     act(() => ref.current!.spawnAt(200, 100));
 
