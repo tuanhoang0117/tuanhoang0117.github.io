@@ -74,28 +74,104 @@ test("clicking or pressing the mascot drops tokens", async ({ page, isMobile }) 
   await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
 });
 
-test("no school banner is on the page, and the body reserves no space for one", async ({
-  page,
-}) => {
-  for (const [width, height] of [
-    [320, 640],
-    [375, 812],
-    [768, 1024],
-    [1279, 800],
-    [1280, 800],
-    [1440, 900],
-  ] as const) {
+/** The pieces the strip must sit clear of, by name, measured at rest. */
+async function stripNeighbours(page: Page, withMascot: boolean) {
+  const boxes: Record<string, Box> = {
+    title: await box(title(page)),
+    tagline: await box(page.getByText(site.tagline, { exact: true })),
+    intro: await box(intro(page)),
+    photo: await box(intro(page).getByRole("img", { name: site.name, exact: true })),
+    link: await box(workLink(page)),
+  };
+  if (withMascot) {
+    boxes.mustang = await box(page.getByRole("group", { name: mascotLabel }));
+    boxes.canvas = await box(mascot(page).locator("canvas"));
+  }
+  return boxes;
+}
+
+for (const [width, height] of [
+  [320, 640],
+  [375, 812],
+  [768, 1024],
+  [1279, 800],
+  [1280, 800],
+  [1440, 900],
+  [1920, 1080],
+] as const) {
+  test(`at ${width}x${height} the school strip sits in the hero flow between the tagline and the intro`, async ({
+    page,
+    isMobile,
+  }) => {
+    const withMascot = width >= 1280;
+    test.skip(isMobile && withMascot, "Desktop sizes run in the desktop project");
     await page.setViewportSize({ width, height });
     await page.goto("/");
     await expect(title(page)).toBeVisible();
-    await expect(banner(page), `${width}px`).toHaveCount(0);
-    await expect(page.getByRole("region", { name: school.shortName }), `${width}px`).toHaveCount(0);
-    await expect(page.getByText(school.name, { exact: true }), `${width}px`).toHaveCount(0);
+    await settleEntrances(page);
+
+    const strip = page.getByRole("region", { name: school.shortName, exact: true });
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("data-testid", "school-banner");
+    await expect(strip).toHaveAttribute("data-orientation", "horizontal");
+    await expect(strip).toHaveCSS("position", "static");
+    await expect(strip).toHaveCSS("opacity", "1");
+
     const body = page.locator("body");
     for (const side of ["top", "right", "bottom", "left"]) {
-      await expect(body, `${width}px body padding-${side}`).toHaveCSS(`padding-${side}`, "0px");
+      await expect(body, `body padding-${side}`).toHaveCSS(`padding-${side}`, "0px");
     }
-  }
+
+    const stripBox = await box(strip);
+    const boxes = await stripNeighbours(page, withMascot);
+    for (const [name, other] of Object.entries(boxes)) {
+      expect(overlap(stripBox, other), `strip/${name}`).toBe(0);
+    }
+    const tagline = boxes.tagline!;
+    expect(stripBox.y, "strip below the tagline").toBeGreaterThanOrEqual(
+      tagline.y + tagline.height,
+    );
+    for (const name of withMascot ? ["intro", "mustang"] : ["intro"]) {
+      expect(stripBox.y + stripBox.height, `strip above the ${name}`).toBeLessThanOrEqual(
+        boxes[name]!.y,
+      );
+    }
+    expect(stripBox.x).toBeGreaterThanOrEqual(0);
+    expect(stripBox.x + stripBox.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+
+    // Scrolling moves the strip with the page: same place in the document, still shown.
+    const docTop = () =>
+      strip.evaluate((el) => Math.round(el.getBoundingClientRect().top + window.scrollY));
+    const before = await docTop();
+    await page.evaluate(() => window.scrollBy(0, 400));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    // Long enough for any fade (the fixed banner's is 300ms) to have finished.
+    await page.waitForTimeout(400);
+    expect(await docTop(), "strip keeps its document position").toBe(before);
+    await expect(strip).toHaveCSS("opacity", "1");
+    await expect(strip).toHaveCSS("position", "static");
+    await expect(strip).toHaveAttribute("data-state", "shown");
+    await expect(strip).not.toHaveAttribute("aria-hidden", "true");
+  });
+}
+
+test("under reduced motion the school strip holds still", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const strip = banner(page);
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveAttribute("data-copies", "1");
+  const text = strip.getByText(school.name, { exact: true });
+  const first = await box(text);
+  await page.waitForTimeout(500);
+  const second = await box(text);
+  expect(second.x, "the name does not scroll").toBe(first.x);
+  expect(second.y).toBe(first.y);
 });
 
 /** The hero's pieces, by name, for pairwise overlap checks. */
@@ -104,6 +180,7 @@ async function heroBoxes(page: Page, withMascot: boolean) {
     title: await box(title(page)),
     tagline: await box(page.getByText(site.tagline, { exact: true })),
     intro: await box(intro(page)),
+    strip: await box(banner(page)),
   };
   if (withMascot) {
     const group = page.getByRole("group", { name: mascotLabel });
