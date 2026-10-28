@@ -2,11 +2,11 @@
 
 Personal site of Tuan Hoang, computer science student at Cal Poly SLO.
 
-v2 is a rebuild in React, Vite, TypeScript, and Tailwind, with a pixel/digital rendering
-aesthetic and code-drawn pixel art. It's built with an agentic workflow run like a small
-engineering team. Planned work becomes issues with testable acceptance criteria, coding agents
-take issues in isolated git worktrees, and every change lands through a PR gated by CI, an
-independent reviewer agent, and human review.
+Built in React, Vite, TypeScript, and Tailwind, with a pixel/digital rendering aesthetic and
+code-drawn pixel art. It's built with an agentic workflow run like a small engineering team.
+Planned work becomes issues with testable acceptance criteria, coding agents take issues in
+isolated git worktrees, and every change lands through a PR gated by CI, QA and reviewer agents
+sized to the change's risk, and human review.
 
 ## How it's built
 
