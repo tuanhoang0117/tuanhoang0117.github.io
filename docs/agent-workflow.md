@@ -42,6 +42,35 @@ Several issues run this path at once. They stay out of each other's way because:
   `App.tsx`.
 - **Separate ports.** Each agent runs its test server on its own port.
 
+## How much checking a PR gets
+
+Adopted by Tuan on 2026-10-27, after one home-page PR took six QA rounds and five reviews. Most
+of those re-runs checked a design that changed again afterwards, and QA and the reviewer each ran
+the same full suite that CI runs anyway. The agents still catch real bugs (two keyboard bugs in the
+menu, the banner covering content), so the checks stay but are sized to the risk.
+
+1. **Tuan sees it first.** Before any QA or review, the lead shows Tuan a screenshot or the running
+   dev server and he confirms the design. Agents never check a design that isn't settled.
+2. **Checks match the risk.** The lead labels each PR's tier in its body:
+   - **Low:** docs, icons and assets, copy, config, test-only changes. CI plus Tuan's approval; no
+     agents. The lead posts both agent statuses as `"Not needed: low risk (<why>)"` with a PR
+     comment saying so.
+   - **Medium:** one visual component or a contained change. One combined agent reviews the diff,
+     makes deliberate breaks and checks the page in a real browser, then posts both statuses.
+   - **High:** interaction, keyboard and accessibility, layout across screen sizes, physics,
+     anything shared by many pages. Separate QA and reviewer, as before.
+3. **Agents don't re-run the whole suite.** CI runs every test on every push. Agents run
+   `npm run check` and only the e2e specs for the files that changed, and spend their effort on
+   judgment: the diff, deliberate breaks, and real-browser checks.
+4. **Re-checks cover only what changed.** After a fix, the reviewer reviews the fix commit (and
+   QA re-tests only the affected behavior) instead of the whole PR. A v2 merge that leaves the PR's
+   own files unchanged carries the verdicts forward with a disclosure comment (automated by #60).
+5. **A cheaper model for QA.** QA is mostly mechanical; it runs on a smaller model. Reviews keep
+   the stronger one.
+6. **Split by risk, bundle the rest.** Put a risky piece (like the menu) in its own PR so its
+   checks stay focused. Bundle small low-risk changes into one PR, since every agent run has a fixed
+   start-up cost.
+
 ## The bot account
 
 Every agent acts on GitHub as **`tuanhoang-bot`**, a separate machine account with write access to
@@ -80,9 +109,10 @@ On `v2`:
 - New commits after an approval cancel it.
 
 Branches must be **up to date** with `v2` before merging. When one PR merges, every other open PR
-must update, and both agents check it again, because what they approved is no longer what would
-merge. It costs a few minutes of agent time per PR, and it catches two PRs that pass separately and
-break together. Tuan chose quality over speed here.
+must update. CI re-runs on the updated branch, which catches two PRs that pass separately and break
+together. If the PR's own files are unchanged, the agents' verdicts carry forward with a
+disclosure comment; otherwise the changed part is checked again (see "How much checking a PR
+gets").
 
 ### Overriding a gate
 
