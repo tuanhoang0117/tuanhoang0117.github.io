@@ -101,15 +101,32 @@ export function playEntrance(
 }
 
 /**
- * Shared card hover lift and press, by resting shadow size. Hover lifts the card up-left and
- * steps the block shadow up one size; press pushes it down-right into a smaller shadow. Add a
- * shadow color (`shadow-cove`, or `cardShadow()` from src/styles/themes.ts) for an accent
- * shadow: the size utilities keep whatever color is set. Movement is `motion-safe` only; under
- * reduced motion the shadow still changes, instantly, as feedback. Class names are written out
- * in full so Tailwind generates them.
+ * The float shared by every size: straight up 4px (`-translate-y-1`), no sideways shift, with a
+ * soft 200ms ease-out. It runs on hover, on keyboard focus of the card itself
+ * (`focus-visible`), and on keyboard focus of a link or button inside it (`has-focus-visible`).
+ *
+ * Hover is `pointer-fine:hover:`. Tailwind's `hover:` already requires `(hover: hover)`, and
+ * `pointer-fine:` adds `(pointer: fine)`, so a touch tap never leaves a card stuck raised.
+ *
+ * Press pushes the card 2px down. It is written twice: plain `active:` for touch, and
+ * `pointer-fine:active:` because Tailwind emits `pointer-fine:hover:` after plain `active:`,
+ * so with a mouse the hover rule would otherwise win while the button is held.
+ *
+ * Movement is `motion-safe` only.
+ */
+const float =
+  "transition duration-200 ease-out motion-safe:pointer-fine:hover:-translate-y-1 motion-safe:focus-visible:-translate-y-1 motion-safe:has-focus-visible:-translate-y-1 motion-safe:active:translate-y-0.5 motion-safe:pointer-fine:active:translate-y-0.5";
+
+/**
+ * Shared card hover float and press, by resting shadow size. Raised (see `float`), the block
+ * shadow steps up one size so the card reads as lifted off the page; pressed, it steps down one
+ * size. Add a shadow color (`shadow-cove`, or `cardShadow()` from src/styles/themes.ts) for an
+ * accent shadow: the size utilities keep whatever color is set. Under reduced motion the card
+ * doesn't move and the shadow still changes, instantly (index.css cuts transitions to ~0), as
+ * feedback. Class names are written out in full so Tailwind generates them.
  */
 export const cardLift = {
-  sm: "shadow-block-sm transition duration-150 ease-out hover:shadow-block active:shadow-none motion-safe:hover:-translate-x-0.5 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-x-0.5 motion-safe:active:translate-y-0.5",
-  md: "shadow-block transition duration-150 ease-out hover:shadow-block-lg active:shadow-block-sm motion-safe:hover:-translate-x-0.5 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-x-0.5 motion-safe:active:translate-y-0.5",
-  lg: "shadow-block-lg transition duration-150 ease-out hover:shadow-block-xl active:shadow-block motion-safe:hover:-translate-x-0.5 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-x-0.5 motion-safe:active:translate-y-0.5",
+  sm: `shadow-block-sm pointer-fine:hover:shadow-block focus-visible:shadow-block has-focus-visible:shadow-block active:shadow-none pointer-fine:active:shadow-none ${float}`,
+  md: `shadow-block pointer-fine:hover:shadow-block-lg focus-visible:shadow-block-lg has-focus-visible:shadow-block-lg active:shadow-block-sm pointer-fine:active:shadow-block-sm ${float}`,
+  lg: `shadow-block-lg pointer-fine:hover:shadow-block-xl focus-visible:shadow-block-xl has-focus-visible:shadow-block-xl active:shadow-block pointer-fine:active:shadow-block ${float}`,
 } as const;

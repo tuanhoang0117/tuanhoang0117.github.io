@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { CaseStudy as CaseStudyData, Image } from "../../content/types";
 import { cardShadow, pageThemes } from "../../styles/themes";
-import { Stagger } from "../motion";
+import { cardLift, Stagger } from "../motion";
 import { pad } from "./labels";
 
 const theme = pageThemes.portfolio;
@@ -119,7 +119,7 @@ export function CaseStudy({ study, images }: CaseStudyProps) {
             key={s.key}
             aria-labelledby={`case-study-${s.key}`}
             data-section={s.key}
-            className={`border-2 border-ink p-6 shadow-block-lg sm:p-8 ${s.wash ? theme.wash : "bg-card"} ${cardShadow(theme, i)}`}
+            className={`border-2 border-ink p-6 sm:p-8 ${cardLift.lg} ${s.wash ? theme.wash : "bg-card"} ${cardShadow(theme, i)}`}
           >
             <h2 id={`case-study-${s.key}`} className="label-mono mb-4 text-poly">
               {pad(i + 1)} — {s.key}
