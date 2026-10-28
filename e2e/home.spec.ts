@@ -9,6 +9,9 @@ const title = (page: Page) => page.getByRole("heading", { level: 1, name: site.n
 const mascot = (page: Page) => page.getByRole("button", { name: mascotLabel, exact: true });
 const banner = (page: Page) => page.getByTestId("school-banner");
 const overlay = (page: Page) => page.getByTestId("physics-overlay");
+const workLink = (page: Page) => page.getByRole("link", { name: homeIntro.workLink });
+/** The intro block: photo, label, about text, and the work link. */
+const intro = (page: Page) => page.locator("[data-stagger]").filter({ has: workLink(page) });
 
 async function box(locator: Locator): Promise<Box> {
   const value = await locator.boundingBox();
@@ -16,7 +19,7 @@ async function box(locator: Locator): Promise<Box> {
   return value!;
 }
 
-/** Waits for the card entrances to finish, so layout is measured at rest, not mid-rise. */
+/** Waits for the entrances to finish, so layout is measured at rest, not mid-rise. */
 async function settleEntrances(page: Page) {
   await expect
     .poll(
@@ -97,13 +100,10 @@ test("no school banner is on the page, and the body reserves no space for one", 
 
 /** The hero's pieces, by name, for pairwise overlap checks. */
 async function heroBoxes(page: Page, withMascot: boolean) {
-  const card = page
-    .locator("[data-stagger]")
-    .filter({ has: page.getByRole("link", { name: homeIntro.workLink }) });
   const boxes: Record<string, Box> = {
     title: await box(title(page)),
     tagline: await box(page.getByText(site.tagline, { exact: true })),
-    card: await box(card),
+    intro: await box(intro(page)),
   };
   if (withMascot) {
     const group = page.getByRole("group", { name: mascotLabel });
@@ -145,8 +145,8 @@ for (const [width, height] of [
 
     const boxes = await heroBoxes(page, true);
     expect(overlaps(boxes)).toEqual([]);
-    // "See my work" is the hero's one button. It lives inside the intro card, so it is checked
-    // against everything except the card that holds it.
+    // "See my work" is the hero's one call to action. It lives inside the intro, so it is checked
+    // against everything except the intro that holds it.
     const button = await box(page.getByRole("link", { name: homeIntro.workLink }));
     for (const name of ["title", "tagline", "mustang", "canvas"]) {
       expect(overlap(button, boxes[name]!), `button/${name}`).toBe(0);
@@ -194,6 +194,36 @@ for (const [width, height] of [
     ).toBe(0);
   });
 }
+
+test("the intro sits open on the graph paper with no card", async ({ page }) => {
+  await page.goto("/");
+  await settleEntrances(page);
+
+  const block = intro(page);
+  await expect(block).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(block).toHaveCSS("box-shadow", "none");
+  for (const side of ["top", "right", "bottom", "left"]) {
+    await expect(block, `intro border-${side}`).toHaveCSS(`border-${side}-width`, "0px");
+  }
+
+  const photo = block.getByRole("img", { name: site.name, exact: true });
+  await expect(photo).toHaveCSS("border-top-width", "2px");
+  await expect(photo).toHaveCSS("box-shadow", "none");
+
+  const link = workLink(page);
+  await expect(link).toHaveCSS("text-decoration-line", "underline");
+  await expect(link).toHaveCSS("border-top-width", "0px");
+  await expect(link).toHaveCSS("box-shadow", "none");
+  await expect(link).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  const label = block.getByText(homeIntro.label, { exact: true });
+  await expect(label).toBeVisible();
+  const body = await box(block.getByText(homeIntro.body, { exact: true }));
+  const labelBox = await box(label);
+  expect(labelBox.y + labelBox.height, "label sits above the about text").toBeLessThanOrEqual(
+    body.y,
+  );
+});
 
 test("the mascot sits directly on the graph paper without a card frame", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
