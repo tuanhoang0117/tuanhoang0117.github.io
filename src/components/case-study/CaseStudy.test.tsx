@@ -270,9 +270,15 @@ describe("ProjectDetail: the Develop for Good case study", () => {
       const list = regions[0]!.parentElement!;
       expect(list).toHaveAttribute("data-stagger");
       expect([...list.children]).toEqual(regions);
-      expect(animate.mock.contexts).toEqual(regions);
+      // The page title's shimmer animates too; this test is about the entrance stagger only.
+      const stagger = animate.mock.contexts
+        .map((el, i) => [el as Element, i] as const)
+        .filter(([el]) => !el.matches("[data-shimmer]"));
+      expect(stagger.map(([el]) => el)).toEqual(regions);
       const calls = animate.mock.calls as unknown as [Keyframe[], KeyframeAnimationOptions][];
-      expect(calls.map(([, o]) => o.delay)).toEqual(regions.map((_, i) => i * STAGGER_STEP_MS));
+      expect(stagger.map(([, i]) => calls[i]![1].delay)).toEqual(
+        regions.map((_, i) => i * STAGGER_STEP_MS),
+      );
     });
   });
 });
