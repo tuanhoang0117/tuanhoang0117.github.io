@@ -130,10 +130,9 @@ test.describe("/lab/physics", () => {
     // The button under it still works, and so does a nav link.
     await dropButton(page).click();
     await expect(overlay(page)).toHaveAttribute("data-tokens", "4");
-    await page
-      .getByRole("navigation", { name: "Main" })
-      .getByRole("link", { name: "Resume" })
-      .click();
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await nav.getByRole("button", { name: "Open menu" }).click();
+    await nav.getByRole("link", { name: "Resume" }).click();
     await expect(page).toHaveURL("/resume");
     await expect(overlay(page)).toHaveCount(0);
   });

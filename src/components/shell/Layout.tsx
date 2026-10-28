@@ -21,7 +21,8 @@ export function Layout() {
         Skip to content
       </a>
       <Nav />
-      <main id="main" className="flex-1">
+      {/* On phones the page title starts high enough to meet the fixed menu toggle. */}
+      <main id="main" className="flex-1 pt-4 sm:pt-0">
         <PageTransition>
           <Outlet />
         </PageTransition>
