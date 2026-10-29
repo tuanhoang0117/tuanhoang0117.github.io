@@ -1,47 +1,135 @@
 import type { MascotVisualSource } from "../../content/types";
+import { mustyIdle } from "../../pixel/sprites/musty-idle";
+import { TRANSPARENT } from "../../pixel/types";
+import { pixelsOf } from "../../pixel/validate";
 import type { Raster } from "./sampling";
 
 /** Rasters are sampled at this size: enough detail for the densest grid, cheap to keep. */
 export const SOURCE_SIZE = 384;
 
+/** Share of the raster's side the sprite spans. The margin keeps the outline off the edge. */
+export const SILHOUETTE_SPAN = 0.84;
+
+/** Where sprite pixel (x, y)'s center lands in a `size` raster, for an `artSize`-wide sprite. */
+export function artToRaster(x: number, y: number, artSize: number, size = SOURCE_SIZE) {
+  const cell = (size * SILHOUETTE_SPAN) / artSize;
+  const offset = (size - cell * artSize) / 2;
+  return { x: offset + (x + 0.5) * cell, y: offset + (y + 0.5) * cell, cell };
+}
+
 /**
- * The placeholder visual: a shaded sphere, lit from the upper left, in grayscale. It stands in
- * for the mustang art until Tuan supplies it. Shading matters more than shape here: the glyph
- * renderer turns the luminance into depth, so a flat disc would hide whether that works.
- * Drawn with plain math rather than a canvas, so it is identical everywhere and testable.
+ * Brightness of each sprite pixel's surface before lighting. Ink inside the head (the eye, the
+ * nostril, the line between the ears) stays dark so the features read; ink on the outline is just
+ * more head, since the renderer draws its own outline.
+ */
+const ALBEDO = { coat: 0.8, mane: 1, light: 1, feature: 0.1 };
+
+/** Three box blurs approximate a Gaussian. Returns a new array; `field` is left alone. */
+function blur(field: Float32Array, size: number, radius: number): Float32Array {
+  const r = Math.max(1, Math.round(radius));
+  const width = 2 * r + 1;
+  let src = field;
+  for (let pass = 0; pass < 6; pass++) {
+    // Even passes run along rows, odd ones along columns. Outside the raster counts as 0.
+    const [lineStep, step] = pass % 2 === 0 ? [size, 1] : [1, size];
+    const out = new Float32Array(size * size);
+    for (let line = 0; line < size; line++) {
+      const base = line * lineStep;
+      let sum = 0;
+      for (let k = 0; k <= Math.min(r, size - 1); k++) sum += src[base + k * step]!;
+      for (let k = 0; k < size; k++) {
+        out[base + k * step] = sum / width;
+        if (k + r + 1 < size) sum += src[base + (k + r + 1) * step]!;
+        if (k - r >= 0) sum -= src[base + (k - r) * step]!;
+      }
+    }
+    src = out;
+  }
+  return src;
+}
+
+/**
+ * The placeholder visual: the silhouette of Musty's idle sprite, embossed and lit from the upper
+ * left in grayscale. It stands in for the approved mustang art. Shading matters as much as shape:
+ * the glyph renderer turns luminance into depth, so a flat cutout would read as a stencil. The
+ * corners are softened so the head reads as a head rather than a stack of squares. Drawn with
+ * plain math rather than a canvas, so it is identical everywhere and testable.
  */
 export function createPlaceholderRaster(size = SOURCE_SIZE): Raster {
-  const data = new Uint8ClampedArray(size * size * 4);
-  const radius = size * 0.4;
-  const center = size / 2;
+  const art = mustyIdle.frames[0]!;
+  const artSize = Math.max(art.length, ...art.map((row) => pixelsOf(row).length));
+  const at = (x: number, y: number) => pixelsOf(art[y] ?? "")[x] ?? TRANSPARENT;
+  const filled = (x: number, y: number) => at(x, y) !== TRANSPARENT;
+  const albedoOf = (x: number, y: number) => {
+    const key = at(x, y);
+    if (key === "y") return ALBEDO.mane;
+    if (key === "w") return ALBEDO.light;
+    const enclosed = filled(x - 1, y) && filled(x + 1, y) && filled(x, y - 1) && filled(x, y + 1);
+    return key === "k" && enclosed ? ALBEDO.feature : ALBEDO.coat;
+  };
+
+  // Nearest-neighbor upscale of the sprite: its mask and the surface brightness under it.
+  const { cell } = artToRaster(0, 0, artSize, size);
+  const offset = (size - cell * artSize) / 2;
+  const mask = new Float32Array(size * size);
+  const albedo = new Float32Array(size * size);
+  for (let py = 0; py < size; py++) {
+    const y = Math.floor((py + 0.5 - offset) / cell);
+    for (let px = 0; px < size; px++) {
+      const x = Math.floor((px + 0.5 - offset) / cell);
+      if (x < 0 || y < 0 || x >= artSize || y >= artSize || !filled(x, y)) continue;
+      mask[py * size + px] = 1;
+      albedo[py * size + px] = albedoOf(x, y);
+    }
+  }
+
+  // Softened outline: a slightly blurred mask, cut at one half with about a pixel of antialiasing.
+  const soft = blur(mask, size, cell * 0.2);
+  // Surface tone, blurred only among filled pixels (normalized), so the edge doesn't darken.
+  const tone = blur(albedo, size, cell * 0.12);
+  const toneWeight = blur(mask, size, cell * 0.12);
+  // Height: a tight bevel at the edges plus a broad dome over the whole head.
+  const bevel = blur(mask, size, cell * 0.45);
+  const dome = blur(mask, size, cell * 1.6);
+  const height = (i: number) => bevel[i]! * 0.55 + dome[i]! * 0.45;
+  const relief = cell * 1.8;
+
   // Unit vector toward the light: up, left, and toward the viewer.
   const light = [-0.48, -0.56, 0.68];
   const norm = Math.hypot(light[0]!, light[1]!, light[2]!);
   const [lx, ly, lz] = light.map((c) => c / norm) as [number, number, number];
+  // Blinn-Phong halfway vector with the viewer straight on.
+  const hn = Math.hypot(lx, ly, lz + 1);
+  const [hx, hy, hz] = [lx / hn, ly / hn, (lz + 1) / hn];
 
+  const data = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
-      const nx = (px + 0.5 - center) / radius;
-      const ny = (py + 0.5 - center) / radius;
-      const d2 = nx * nx + ny * ny;
-      // One pixel of antialiasing at the rim, so the edge isn't jagged when sampled finely.
-      const coverage = Math.max(0, Math.min(1, (1 - Math.sqrt(d2)) * radius + 0.5));
+      const i = py * size + px;
+      const coverage = Math.max(0, Math.min(1, (soft[i]! - 0.5) * 6 + 0.5));
       if (coverage === 0) continue;
-      const nz = Math.sqrt(Math.max(0, 1 - d2));
+      const left = height(px > 0 ? i - 1 : i);
+      const right = height(px < size - 1 ? i + 1 : i);
+      const up = height(py > 0 ? i - size : i);
+      const down = height(py < size - 1 ? i + size : i);
+      let nx = -(right - left) * relief;
+      let ny = -(down - up) * relief;
+      let nz = 1;
+      const n = Math.hypot(nx, ny, nz);
+      nx /= n;
+      ny /= n;
+      nz /= n;
       const diffuse = Math.max(0, nx * lx + ny * ly + nz * lz);
-      // Blinn-Phong highlight with the viewer straight on.
-      const hx = lx;
-      const hy = ly;
-      const hz = lz + 1;
-      const hn = Math.hypot(hx, hy, hz);
-      const specular = Math.max(0, (nx * hx + ny * hy + nz * hz) / hn) ** 40;
-      const shade = Math.min(1, 0.06 + diffuse * 0.82 + specular * 0.5);
-      const i = (py * size + px) * 4;
+      const specular = Math.max(0, nx * hx + ny * hy + nz * hz) ** 40;
+      const weight = toneWeight[i]!;
+      const surface = weight > 0.001 ? tone[i]! / weight : ALBEDO.coat;
+      const shade = Math.min(1, 0.06 + surface * diffuse * 0.82 + specular * 0.4);
       const gray = Math.round(shade * 255);
-      data[i] = gray;
-      data[i + 1] = gray;
-      data[i + 2] = gray;
-      data[i + 3] = Math.round(coverage * 255);
+      const p = i * 4;
+      data[p] = gray;
+      data[p + 1] = gray;
+      data[p + 2] = gray;
+      data[p + 3] = Math.round(coverage * 255);
     }
   }
   return { width: size, height: size, data };
