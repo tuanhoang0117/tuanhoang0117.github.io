@@ -20,6 +20,20 @@ async function settle(page: Page) {
     });
 }
 
+/**
+ * Waits a frame for entrances to start, then until every animation on the page that can end has
+ * finished. Looping ones (the banner, the title shimmer) never finish, so they are skipped.
+ */
+async function settlePage(page: Page) {
+  await page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const ending = document
+      .getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity);
+    await Promise.all(ending.map((a) => a.finished.catch(() => {})));
+  });
+}
+
 /** The parts of the block style the home link must share with the menu toggle. */
 function blockStyle(page: Page, selector: string) {
   return page.locator(selector).evaluate((el) => {
@@ -117,6 +131,8 @@ test.describe("home link", () => {
       await page.setViewportSize({ width, height: 800 });
       for (const path of titled) {
         await page.goto(path);
+        // Measure the settled layout: the page entrance starts the title lower than where it ends.
+        await settlePage(page);
         const overlap = await page.evaluate(() => {
           const a = document.querySelector("[data-home-link]")!.getBoundingClientRect();
           const h = document.querySelector("h1")!.getBoundingClientRect();

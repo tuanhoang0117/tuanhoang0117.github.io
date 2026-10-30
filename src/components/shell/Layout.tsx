@@ -22,9 +22,10 @@ export function Layout() {
       </a>
       <Nav />
       {/* The fixed corner blocks (home link and menu toggle) end 59px down on phones and 63px from
-          sm, shadow included. This keeps the home title, which starts highest, clear of them;
-          from lg the hero's own padding does. e2e/header.spec.ts checks every title. */}
-      <main id="main" className="flex-1 pt-6 sm:pt-5 lg:pt-0">
+          sm, shadow included. This padding keeps the home title, which starts highest, clear of
+          them once the entrance settles: its box starts at 60px on phones and 64px from sm. From
+          lg the hero's own padding does. e2e/header.spec.ts checks every title. */}
+      <main id="main" className="flex-1 pt-7 sm:pt-6 lg:pt-0">
         <PageTransition>
           <Outlet />
         </PageTransition>
