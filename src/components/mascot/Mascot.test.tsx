@@ -41,6 +41,37 @@ describe("Mascot", () => {
     expect(env.pendingFrames()).toBe(1);
   });
 
+  it("spins the model slowly, so the silhouette it draws changes", async () => {
+    render(<Mascot />);
+    await settle();
+    // The spin starts from the three-quarter rest pose.
+    expect(canvas().dataset.angle).toBe("45");
+    // Which cells are painted: the silhouette. The wave changes glyphs every frame; only the
+    // turning model changes this.
+    const silhouette = () =>
+      env.drawImage.mock.calls
+        .map(([, , , , , dx, dy]) => `${dx},${dy}`)
+        .sort()
+        .join(" ");
+
+    const angles: number[] = [];
+    let previous = "";
+    for (let i = 0; i < 12; i++) {
+      env.drawImage.mockClear();
+      act(() => env.runFrame(100));
+      angles.push(Number(canvas().dataset.angle));
+      const now = silhouette();
+      if (i > 0) expect(now, `frame ${i} draws the turned model`).not.toBe(previous);
+      previous = now;
+    }
+    // Always forward, a few degrees per tenth of a second: about 30° a second.
+    for (let i = 1; i < angles.length; i++) {
+      expect(angles[i]! - angles[i - 1]!).toBeGreaterThan(0);
+      expect(angles[i]! - angles[i - 1]!).toBeLessThanOrEqual(4);
+    }
+    expect(angles.at(-1)! - 45).toBeGreaterThan(20);
+  });
+
   it("sizes the backing store to the device pixel ratio, so glyphs aren't upscaled", async () => {
     vi.stubGlobal("devicePixelRatio", 2);
     render(<Mascot />);
@@ -165,6 +196,17 @@ describe("Mascot with reduced motion", () => {
     fireEvent.pointerMove(mascot(), { clientX: 10, clientY: 10 });
     act(() => env.intersections[0]!.trigger(true));
     expect(env.pendingFrames()).toBe(0);
+  });
+
+  it("holds the model still at the three-quarter angle instead of spinning", async () => {
+    render(<Mascot />);
+    await settle();
+    expect(canvas().dataset.angle).toBe("45");
+    const drawn = env.drawImage.mock.calls.length;
+    expect(drawn).toBeGreaterThan(0);
+    act(() => env.runFrame(1000));
+    expect(canvas().dataset.angle).toBe("45");
+    expect(env.drawImage.mock.calls.length).toBe(drawn);
   });
 
   it("still activates on click and keyboard", async () => {

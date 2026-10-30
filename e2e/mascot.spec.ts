@@ -10,6 +10,24 @@ const last = (page: Page) => page.getByTestId("mascot-last");
 const framesDrawn = (page: Page) =>
   canvas(page).evaluate((c: HTMLCanvasElement) => Number(c.dataset.frames ?? 0));
 
+/** The model's current angle in degrees, and the painted silhouette's horizontal extent. */
+const spinState = (page: Page) =>
+  canvas(page).evaluate((c: HTMLCanvasElement) => {
+    const { data } = c.getContext("2d")!.getImageData(0, 0, c.width, c.height);
+    let [left, right] = [c.width, -1];
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (data[(y * c.width + x) * 4 + 3]! === 0) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+      }
+    }
+    return { angle: Number(c.dataset.angle), left, right };
+  });
+
+/** Degrees turned from `a` to `b`, forward, 0–359. */
+const turnedBy = (a: number, b: number) => (((b - a) % 360) + 360) % 360;
+
 test.describe("/lab/mascot", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/mascot");
@@ -52,6 +70,19 @@ test.describe("/lab/mascot", () => {
     // 30 fps on low-power devices, 60 elsewhere. 20 leaves room for a busy CI runner while still
     // catching a loop that stalls or stops.
     expect(perSecond).toBeGreaterThanOrEqual(20);
+  });
+
+  test("the model spins slowly, and the drawn silhouette turns with it", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "running");
+    const before = await spinState(page);
+    await page.waitForTimeout(1000);
+    const after = await spinState(page);
+    // About 30° a second (one turn in 12 s). A loose range: a busy runner draws fewer frames.
+    const turned = turnedBy(before.angle, after.angle);
+    expect(turned).toBeGreaterThan(10);
+    expect(turned).toBeLessThan(90);
+    // The glyphs on the canvas follow the model: its outline moved, not just a number.
+    expect([after.left, after.right]).not.toEqual([before.left, before.right]);
   });
 
   test("a click fires onActivate at the pointer", async ({ page }) => {
@@ -191,10 +222,61 @@ test.describe("/lab/mascot with reduced motion", () => {
     expect(await framesDrawn(page)).toBe(settled);
   });
 
+  test("holds the model still at a three-quarter angle", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "static");
+    const first = await spinState(page);
+    expect(first.angle).toBe(45);
+    expect(first.right).toBeGreaterThan(first.left);
+    await page.waitForTimeout(1000);
+    expect(await spinState(page)).toEqual(first);
+  });
+
   test("clicking and the keyboard still activate", async ({ page }) => {
     await mascot(page).click();
     await expect(calls(page)).toHaveText("1");
     await mascot(page).press("Enter");
     await expect(calls(page)).toHaveText("2");
   });
+});
+
+test.describe("the spinning mascot on the home page", () => {
+  for (const [width, height] of [
+    [1280, 800],
+    [1440, 900],
+  ] as const) {
+    test(`at ${width}px it spins at a steady rate, without overflow or axe violations`, async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, "The home page mounts the mascot only at xl and above");
+      await page.setViewportSize({ width, height });
+      await page.goto("/");
+      await expect(canvas(page)).toHaveAttribute("data-state", "running");
+
+      // Frames per second, timed inside the page. Timing from the test side would stretch the
+      // window by however long each round trip waits for a busy main thread, so a slow frame
+      // could still count 20 frames.
+      const { perSecond, turned } = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+        const read = () => [Number(c.dataset.frames ?? 0), Number(c.dataset.angle)] as const;
+        const [frames0, angle0] = read();
+        const t0 = performance.now();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const [frames1, angle1] = read();
+        return {
+          perSecond: ((frames1 - frames0) * 1000) / (performance.now() - t0),
+          turned: (((angle1 - angle0) % 360) + 360) % 360,
+        };
+      });
+      // The same budget as the lab's frame-rate test: 20 frames a second on a busy runner.
+      expect(perSecond).toBeGreaterThanOrEqual(20);
+      expect(turned).toBeGreaterThan(10);
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(0);
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(violations.map((v) => `${v.impact} ${v.id}: ${v.help}`)).toEqual([]);
+    });
+  }
 });
