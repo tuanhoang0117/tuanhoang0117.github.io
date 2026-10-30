@@ -1,9 +1,34 @@
 import { describe, expect, it } from "vitest";
 import type { SpriteDef } from "../../../pixel/types";
-import { sprites } from "../../../pixel/sprites";
+import { costumedSprites, sprites } from "../../../pixel/sprites";
 import { horseTrot } from "../../../pixel/sprites/horse-trot";
 import { mustyIdle } from "../../../pixel/sprites/musty-idle";
-import { pixelCircle, tokenArt, tokenVisual, type TokenVisual } from "./tokenVisual";
+import {
+  COSTUME_EVERY,
+  pixelCircle,
+  tokenArt,
+  tokenVisual,
+  type TokenVariant,
+  type TokenVisual,
+} from "./tokenVisual";
+
+/** A small seeded generator (mulberry32), so "random" token mixes are repeatable in tests. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** The costumed sprite a variant was drawn from, or undefined for a plain head or horse. */
+const costumeOf = (variant: TokenVariant) =>
+  costumedSprites.find(
+    (s) => s.palette === variant.palette && s.frames.some((f) => f === variant.frame),
+  );
 
 const sprite: SpriteDef = {
   name: "test-token",
@@ -16,10 +41,12 @@ const sprite: SpriteDef = {
 
 const TOKEN_REF = /^var\(--color-[a-z0-9-]+\)$/;
 
+// The plain mix: the default before costumes, and still what fills two tokens in three.
+const plainMix: TokenVisual = { kind: "sprites", sprites: [mustyIdle, horseTrot], scale: 2 };
+
 describe("tokenVisual", () => {
-  it("defaults to the mustang head and the four-legged horse, every frame of both", () => {
-    expect(tokenVisual).toEqual({ kind: "sprites", sprites: [mustyIdle, horseTrot], scale: 2 });
-    const art = tokenArt(tokenVisual);
+  it("mixes the mustang head and the four-legged horse, every frame of both", () => {
+    const art = tokenArt(plainMix);
     expect(art.variants.map((v) => v.frame)).toEqual([
       mustyIdle.frames[0],
       horseTrot.frames[0],
@@ -30,7 +57,7 @@ describe("tokenVisual", () => {
 
   it("alternates sprites, so consecutive tokens are a head, then a horse", () => {
     // PhysicsOverlay hands out variants in order, wrapping around.
-    const palettes = tokenArt(tokenVisual).variants.map((v) => v.palette);
+    const palettes = tokenArt(plainMix).variants.map((v) => v.palette);
     expect(palettes).toEqual([
       mustyIdle.palette,
       horseTrot.palette,
@@ -123,5 +150,95 @@ describe("horse-trot, the four-legged horse token", () => {
     expect(up).not.toEqual(down);
     expect(down![15]!.match(/k+/g)).toHaveLength(2);
     expect(up![15]).not.toBe(down![15]);
+  });
+});
+
+describe("costumed tokens", () => {
+  it("is the default: the head and the horse, plus every costume, at the same scale", () => {
+    expect(tokenVisual).toEqual({
+      kind: "costumed",
+      sprites: [mustyIdle, horseTrot],
+      costumes: costumedSprites,
+      scale: 2,
+    });
+    expect(costumedSprites).toHaveLength(10);
+  });
+
+  it("keeps token size, scale and collision radius exactly as before costumes", () => {
+    const before = tokenArt(plainMix);
+    const after = tokenArt(tokenVisual, seeded(1));
+    for (const key of ["width", "height", "scale", "radius"] as const) {
+      expect(after[key], key).toBe(before[key]);
+    }
+  });
+
+  it.each([1, 2, 3, 42])("dresses exactly one token in every three (seed %i)", (seed) => {
+    const { variants } = tokenArt(tokenVisual, seeded(seed));
+    expect(variants).toHaveLength(COSTUME_EVERY * costumedSprites.length);
+    for (let i = 0; i < variants.length; i += COSTUME_EVERY) {
+      const run = variants.slice(i, i + COSTUME_EVERY);
+      expect(run.filter((v) => costumeOf(v)).length, `tokens ${i}-${i + 2}`).toBe(1);
+    }
+  });
+
+  it("shows every costume once per cycle, each as one of its own frames", () => {
+    const worn = tokenArt(tokenVisual, seeded(7))
+      .variants.map(costumeOf)
+      .filter((s) => s !== undefined);
+    expect(new Set(worn)).toEqual(new Set(costumedSprites));
+    expect(worn).toHaveLength(costumedSprites.length);
+  });
+
+  it("keeps the plain tokens alternating head, horse, through every frame of both", () => {
+    const plain = tokenArt(tokenVisual, seeded(3)).variants.filter((v) => !costumeOf(v));
+    const cycle = tokenArt(plainMix).variants;
+    expect(plain).toEqual(plain.map((_, i) => cycle[i % cycle.length]));
+  });
+
+  it("takes its randomness from the injected source, so a seed repeats exactly", () => {
+    const names = (seed: number) =>
+      tokenArt(tokenVisual, seeded(seed)).variants.map((v) => costumeOf(v)?.name ?? "plain");
+    expect(names(5)).toEqual(names(5));
+    expect(names(5)).not.toEqual(names(6));
+  });
+
+  it("puts costumes in different spots and orders for different random sources", () => {
+    const spots = new Set<string>();
+    const orders = new Set<string>();
+    for (let seed = 0; seed < 20; seed++) {
+      const { variants } = tokenArt(tokenVisual, seeded(seed));
+      spots.add(variants.map((v) => (costumeOf(v) ? "C" : "p")).join(""));
+      orders.add(
+        variants
+          .map((v) => costumeOf(v)?.name)
+          .filter((name) => name !== undefined)
+          .join(","),
+      );
+    }
+    expect(spots.size).toBeGreaterThan(1);
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it("survives a source that returns 0 or the top of its range", () => {
+    for (const random of [() => 0, () => 0.999999999, () => 1]) {
+      const { variants } = tokenArt(tokenVisual, random);
+      expect(variants).toHaveLength(COSTUME_EVERY * costumedSprites.length);
+      for (const v of variants) {
+        expect(v.frame).toBeDefined();
+        expect(v.palette).toBeDefined();
+      }
+    }
+  });
+
+  it("refuses a costume of a different size than the plain tokens", () => {
+    const wide: SpriteDef = { name: "wide", palette: sprite.palette, frames: [["ggggg"]] };
+    expect(() =>
+      tokenArt({ kind: "costumed", sprites: [sprite], costumes: [wide], scale: 1 }, seeded(1)),
+    ).toThrow(/test-token is 4×3, wide is 5×1/);
+  });
+
+  it("falls back to the plain mix when there are no costumes", () => {
+    const art = tokenArt({ ...plainMix, kind: "costumed", costumes: [] }, seeded(1));
+    expect(art.variants).toEqual(tokenArt(plainMix).variants);
   });
 });
