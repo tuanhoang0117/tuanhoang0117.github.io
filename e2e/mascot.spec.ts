@@ -10,6 +10,24 @@ const last = (page: Page) => page.getByTestId("mascot-last");
 const framesDrawn = (page: Page) =>
   canvas(page).evaluate((c: HTMLCanvasElement) => Number(c.dataset.frames ?? 0));
 
+/** The model's current angle in degrees, and the painted silhouette's horizontal extent. */
+const spinState = (page: Page) =>
+  canvas(page).evaluate((c: HTMLCanvasElement) => {
+    const { data } = c.getContext("2d")!.getImageData(0, 0, c.width, c.height);
+    let [left, right] = [c.width, -1];
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (data[(y * c.width + x) * 4 + 3]! === 0) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+      }
+    }
+    return { angle: Number(c.dataset.angle), left, right };
+  });
+
+/** Degrees turned from `a` to `b`, forward, 0–359. */
+const turnedBy = (a: number, b: number) => (((b - a) % 360) + 360) % 360;
+
 test.describe("/lab/mascot", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/mascot");
@@ -52,6 +70,51 @@ test.describe("/lab/mascot", () => {
     // 30 fps on low-power devices, 60 elsewhere. 20 leaves room for a busy CI runner while still
     // catching a loop that stalls or stops.
     expect(perSecond).toBeGreaterThanOrEqual(20);
+  });
+
+  test("the model spins, and the drawn silhouette turns with it", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "running");
+    const before = await spinState(page);
+    await page.waitForTimeout(1500);
+    const after = await spinState(page);
+    // The slowest point of the turn is about 9° a second, so 1.5 s always moves it.
+    expect(turnedBy(before.angle, after.angle)).toBeGreaterThan(5);
+    // The glyphs on the canvas follow the model: its outline moved, not just a number.
+    expect([after.left, after.right]).not.toEqual([before.left, before.right]);
+  });
+
+  test("the spin lingers near the profiles and hurries through edge-on", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "running");
+    // Sampled inside the page every 100 ms for 7 s. The spin starts at 20° and reaches 90°
+    // (edge-on) and 180° (the other profile) within the first 6 s of a 12 s turn.
+    const steps = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+      const out: { from: number; turned: number; seconds: number }[] = [];
+      let angle = Number(c.dataset.angle);
+      let time = performance.now();
+      for (let i = 0; i < 70; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const next = Number(c.dataset.angle);
+        const now = performance.now();
+        out.push({ from: angle, turned: (next - angle + 360) % 360, seconds: (now - time) / 1000 });
+        angle = next;
+        time = now;
+      }
+      return out;
+    });
+    // Always forward: a step backwards would read as nearly a whole turn.
+    for (const { turned } of steps) expect(turned).toBeLessThan(180);
+    // Degrees a second near a profile (0°/180°) and near edge-on (90°/270°).
+    const offProfile = (a: number) => Math.min(a % 180, 180 - (a % 180));
+    const rate = (keep: (a: number) => boolean) => {
+      const picked = steps.filter(({ from }) => keep(from));
+      expect(picked.length, "the samples should cover this part of the turn").toBeGreaterThan(0);
+      const degrees = picked.reduce((sum, { turned }) => sum + turned, 0);
+      return degrees / picked.reduce((sum, { seconds }) => sum + seconds, 0);
+    };
+    const nearProfile = rate((a) => offProfile(a) <= 20);
+    const nearEdge = rate((a) => offProfile(a) >= 70);
+    expect(nearProfile).toBeGreaterThan(0);
+    expect(nearProfile * 3).toBeLessThan(nearEdge);
   });
 
   test("a click fires onActivate at the pointer", async ({ page }) => {
@@ -191,10 +254,62 @@ test.describe("/lab/mascot with reduced motion", () => {
     expect(await framesDrawn(page)).toBe(settled);
   });
 
+  test("holds the model still near side-on, at 20°", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "static");
+    const first = await spinState(page);
+    expect(first.angle).toBe(20);
+    expect(first.right).toBeGreaterThan(first.left);
+    await page.waitForTimeout(1000);
+    expect(await spinState(page)).toEqual(first);
+  });
+
   test("clicking and the keyboard still activate", async ({ page }) => {
     await mascot(page).click();
     await expect(calls(page)).toHaveText("1");
     await mascot(page).press("Enter");
     await expect(calls(page)).toHaveText("2");
   });
+});
+
+test.describe("the spinning mascot on the home page", () => {
+  for (const [width, height] of [
+    [1280, 800],
+    [1440, 900],
+  ] as const) {
+    test(`at ${width}px it spins at a steady rate, without overflow or axe violations`, async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, "The home page mounts the mascot only at xl and above");
+      await page.setViewportSize({ width, height });
+      await page.goto("/");
+      await expect(canvas(page)).toHaveAttribute("data-state", "running");
+
+      // Frames per second, timed inside the page. Timing from the test side would stretch the
+      // window by however long each round trip waits for a busy main thread, so a slow frame
+      // could still count 20 frames.
+      const { perSecond, turned } = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+        const read = () => [Number(c.dataset.frames ?? 0), Number(c.dataset.angle)] as const;
+        const [frames0, angle0] = read();
+        const t0 = performance.now();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const [frames1, angle1] = read();
+        return {
+          perSecond: ((frames1 - frames0) * 1000) / (performance.now() - t0),
+          turned: (((angle1 - angle0) % 360) + 360) % 360,
+        };
+      });
+      // The same budget as the lab's frame-rate test: 20 frames a second on a busy runner.
+      expect(perSecond).toBeGreaterThanOrEqual(20);
+      // Spinning: even the slowest point of the turn, about 9° a second, moves this far.
+      expect(turned).toBeGreaterThan(5);
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(0);
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(violations.map((v) => `${v.impact} ${v.id}: ${v.help}`)).toEqual([]);
+    });
+  }
 });
