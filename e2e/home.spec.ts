@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mascotLabel } from "../src/content/mascot";
+import { mascotCounterLabel, mascotLabel, mascotPrompt } from "../src/content/mascot";
 import { homeIntro, school, site } from "../src/content/site";
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -74,6 +74,71 @@ test("clicking or pressing the mascot drops tokens", async ({ page, isMobile }) 
   await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
 });
 
+const counter = (page: Page) =>
+  page.getByRole("group", { name: mascotLabel }).locator("[data-mascot-counter]");
+
+test("the mustang invites a press and counts click, Enter, and Space", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "The mustang mounts only at xl and above");
+  await page.goto("/");
+  const group = page.getByRole("group", { name: mascotLabel });
+
+  const prompt = group.getByText(mascotPrompt, { exact: true });
+  await expect(prompt).toBeVisible();
+  await expect(counter(page)).toBeVisible();
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 0`);
+  await expect(counter(page)).toHaveAttribute("aria-live", "polite");
+  await expect(counter(page)).toHaveAttribute("aria-atomic", "true");
+
+  await mascot(page).click();
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 1`);
+  await mascot(page).press("Enter");
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 2`);
+  await mascot(page).press("Space");
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 3`);
+  // The same presses still drop tokens.
+  await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
+
+  // Prompt above the mustang, counter below it, neither on top of it.
+  await settleEntrances(page);
+  const button = await box(mascot(page));
+  const promptBox = await box(prompt);
+  const counterBox = await box(counter(page));
+  expect(promptBox.y + promptBox.height, "prompt above the mustang").toBeLessThanOrEqual(button.y);
+  expect(counterBox.y, "counter below the mustang").toBeGreaterThanOrEqual(
+    button.y + button.height,
+  );
+
+  // Local only: a fresh visit starts from zero.
+  await page.reload();
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 0`);
+});
+
+test("under reduced motion the counter still counts and nothing moves", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "The mustang mounts only at xl and above");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await mascot(page).click();
+  await mascot(page).press("Enter");
+  await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 2`);
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 1000 })
+    .toBe(0);
+});
+
+test("below xl there is no prompt or counter, along with no mustang", async ({ page }) => {
+  await page.setViewportSize({ width: 1279, height: 800 });
+  await page.goto("/");
+  await expect(title(page)).toBeVisible();
+  await expect(page.getByText(mascotPrompt, { exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-mascot-counter]")).toHaveCount(0);
+});
+
 /** The pieces the strip must sit clear of, by name, measured at rest. */
 async function stripNeighbours(page: Page, withMascot: boolean) {
   const boxes: Record<string, Box> = {
@@ -90,16 +155,34 @@ async function stripNeighbours(page: Page, withMascot: boolean) {
   return boxes;
 }
 
+/**
+ * The fixed top-corner blocks (home link, menu toggle) as they cover the page: the box plus its
+ * 3px block shadow to the right and below (shadow-block-sm).
+ */
+async function cornerBlocks(page: Page) {
+  const covered = async (locator: Locator) => {
+    const b = await box(locator);
+    return { ...b, width: b.width + 3, height: b.height + 3 };
+  };
+  return {
+    "home link": await covered(page.locator("[data-home-link]")),
+    "menu toggle": await covered(
+      page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /menu$/ }),
+    ),
+  };
+}
+
 for (const [width, height] of [
   [320, 640],
   [375, 812],
   [768, 1024],
+  [1024, 800],
   [1279, 800],
   [1280, 800],
   [1440, 900],
   [1920, 1080],
 ] as const) {
-  test(`at ${width}x${height} the school strip sits in the hero flow between the tagline and the intro`, async ({
+  test(`at ${width}x${height} the school strip tops the page: under the corner blocks, above the name`, async ({
     page,
     isMobile,
   }) => {
@@ -123,26 +206,41 @@ for (const [width, height] of [
     }
 
     const stripBox = await box(strip);
-    const boxes = await stripNeighbours(page, withMascot);
-    for (const [name, other] of Object.entries(boxes)) {
-      expect(overlap(stripBox, other), `strip/${name}`).toBe(0);
-    }
-    const tagline = boxes.tagline!;
-    expect(stripBox.y, "strip below the tagline").toBeGreaterThanOrEqual(
-      tagline.y + tagline.height,
-    );
-    for (const name of withMascot ? ["intro", "mustang"] : ["intro"]) {
-      expect(stripBox.y + stripBox.height, `strip above the ${name}`).toBeLessThanOrEqual(
-        boxes[name]!.y,
-      );
-    }
-    expect(stripBox.x).toBeGreaterThanOrEqual(0);
-    expect(stripBox.x + stripBox.width).toBeLessThanOrEqual(width);
+
+    // Full width, edge to edge, and nothing scrolls sideways.
+    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    expect(stripBox.x, "strip starts at the left edge").toBe(0);
+    expect(stripBox.width, "strip spans the viewport").toBe(clientWidth);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBe(0);
+
+    // Below the fixed corner blocks: they neither cover it nor sit under it.
+    for (const [name, corner] of Object.entries(await cornerBlocks(page))) {
+      expect(overlap(stripBox, corner), `strip/${name}`).toBe(0);
+      expect(stripBox.y, `strip below the ${name}`).toBeGreaterThanOrEqual(
+        corner.y + corner.height,
+      );
+    }
+
+    // Above the name, and clear of everything else in the hero.
+    const boxes = await stripNeighbours(page, withMascot);
+    for (const [name, other] of Object.entries(boxes)) {
+      expect(overlap(stripBox, other), `strip/${name}`).toBe(0);
+      expect(stripBox.y + stripBox.height, `strip above the ${name}`).toBeLessThanOrEqual(other.y);
+    }
+
+    // The topmost thing on the page at the strip's middle row is the strip itself.
+    const onTop = await page.evaluate(
+      ({ y, w }) =>
+        [0.02, 0.25, 0.5, 0.75, 0.98].map(
+          (f) => !!document.elementFromPoint(w * f, y)?.closest('[data-testid="school-banner"]'),
+        ),
+      { y: stripBox.y + stripBox.height / 2, w: clientWidth },
+    );
+    expect(onTop, "nothing covers the strip").toEqual([true, true, true, true, true]);
 
     // Scrolling moves the strip with the page: same place in the document, still shown.
     const docTop = () =>
@@ -159,6 +257,14 @@ for (const [width, height] of [
     await expect(strip).not.toHaveAttribute("aria-hidden", "true");
   });
 }
+
+test("the school strip is on the home page only", async ({ page }) => {
+  for (const path of ["/portfolio", "/portfolio/remind-app", "/resume", "/contact", "/404"]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }), path).toBeVisible();
+    await expect(banner(page), path).toHaveCount(0);
+  }
+});
 
 test("under reduced motion the school strip holds still", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
