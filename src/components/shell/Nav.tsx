@@ -11,6 +11,7 @@ import {
 import { NavLink, useLocation } from "react-router";
 import { navLinks } from "../../content/site";
 import { prefersReducedMotion } from "../motion/motion";
+import { HomeLink } from "./HomeLink";
 
 /** Moving between the toggle and the panel crosses no gap, but leave/enter fire as two events. */
 export const MENU_LEAVE_GRACE_MS = 200;
@@ -150,6 +151,8 @@ export function Nav() {
 
   return (
     <header className="fixed top-3 right-3 z-50 sm:top-4 sm:right-4">
+      {/* Outside the nav, so focus moving to it closes the menu that would otherwise cover it. */}
+      <HomeLink />
       <nav aria-label="Main" onBlur={onNavBlur}>
         <button
           ref={toggleRef}
