@@ -3,6 +3,7 @@ import { mustyIdle } from "../../pixel/sprites/musty-idle";
 import { TRANSPARENT } from "../../pixel/types";
 import { pixelsOf } from "../../pixel/validate";
 import type { Raster } from "./sampling";
+import { buildVoxelModel, createRaster, REST_ANGLE, renderVoxels, type VoxelModel } from "./voxel";
 
 /** Rasters are sampled at this size: enough detail for the densest grid, cheap to keep. */
 export const SOURCE_SIZE = 384;
@@ -49,9 +50,10 @@ function blur(field: Float32Array, size: number, radius: number): Float32Array {
 }
 
 /**
- * The placeholder visual: the silhouette of Musty's idle sprite, embossed and lit from the upper
- * left in grayscale. It stands in for the approved mustang art. Shading matters as much as shape:
- * the glyph renderer turns luminance into depth, so a flat cutout would read as a stencil. The
+ * The flat placeholder (before the spinning voxel model, issue #91; no longer what the renderer
+ * draws): the silhouette of Musty's idle sprite, embossed and lit from the upper left in
+ * grayscale. Shading matters as much as shape: the glyph renderer turns luminance into depth,
+ * so a flat cutout would read as a stencil. The
  * corners are softened so the head reads as a head rather than a stack of squares. Drawn with
  * plain math rather than a canvas, so it is identical everywhere and testable.
  */
@@ -157,23 +159,41 @@ function rasterize(image: HTMLImageElement, size = SOURCE_SIZE): Raster | null {
   return { width: size, height: size, data };
 }
 
-// The placeholder never changes, so it is computed once and shared (it is never written to).
-let placeholder: Raster | null = null;
+// The model and its still pose never change, so they are computed once and shared (the pose is
+// never written to; a spinning renderer draws into its own raster).
+let model: VoxelModel | null = null;
+let restPose: Raster | null = null;
 
 export interface MascotFrames {
   idle: Raster;
   /** Shown briefly on press. The same raster as `idle` when there is no separate active art. */
   active: Raster;
+  /**
+   * Present when the visual is a 3D model. Draws it turned `angle` radians about its vertical
+   * axis into `into` (overwriting it), so the renderer can spin it. `idle` is then the model at
+   * its still pose, `REST_ANGLE`.
+   */
+  turn?: (angle: number, into: Raster) => void;
+}
+
+/** Draws the voxel model of Musty's idle sprite, turned `angle` radians, into `into`. */
+function turnMusty(angle: number, into: Raster) {
+  model ??= buildVoxelModel(mustyIdle.frames[0]!);
+  renderVoxels(model, angle, into, SILHOUETTE_SPAN);
 }
 
 /**
  * Turns the content config into rasters. This is the only place that knows about source kinds:
- * swapping the placeholder for real art is a change to `mascotVisual`, nothing else.
+ * swapping the placeholder for real art is a change to `mascotVisual`, nothing else. The
+ * placeholder is Musty's idle sprite built into voxels (ADR 0003: drawn in code), which spins.
  */
 export async function resolveMascotFrames(source: MascotVisualSource): Promise<MascotFrames> {
   if (source.kind === "procedural-placeholder") {
-    const idle = (placeholder ??= createPlaceholderRaster());
-    return { idle, active: idle };
+    if (!restPose) {
+      restPose = createRaster(SOURCE_SIZE);
+      turnMusty(REST_ANGLE, restPose);
+    }
+    return { idle: restPose, active: restPose, turn: turnMusty };
   }
   const [idleImage, activeImage] = await Promise.all([
     loadImage(source.idleSrc),
