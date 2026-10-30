@@ -1,4 +1,5 @@
 import type { Frame, Palette, SpriteDef } from "../../../pixel/types";
+import { horseTrot } from "../../../pixel/sprites/horse-trot";
 import { mustyIdle } from "../../../pixel/sprites/musty-idle";
 import { pixelsOf } from "../../../pixel/validate";
 
@@ -8,15 +9,25 @@ import { pixelsOf } from "../../../pixel/validate";
  *
  * - `circles`: a `pixels`-wide pixel circle with an ink rim, one variant per fill color.
  * - `sprite`: every frame of the sprite is a variant (tokens cycle through them).
+ * - `sprites`: the frames of several same-sized sprites, interleaved so consecutive tokens
+ *   alternate between sprites: frame 0 of each, then frame 1 of each, and so on.
  *
  * `scale` is the integer CSS-pixel size of one art pixel, so tokens stay pixel-crisp.
  */
 export type TokenVisual =
   | { kind: "circles"; colors: readonly string[]; pixels: number; scale: number }
-  | { kind: "sprite"; sprite: SpriteDef; scale: number };
+  | { kind: "sprite"; sprite: SpriteDef; scale: number }
+  | { kind: "sprites"; sprites: readonly SpriteDef[]; scale: number };
 
-/** Tokens are little pixel mustangs (owner request, 2026-10-27). They cycle Musty's idle frames. */
-export const tokenVisual: TokenVisual = { kind: "sprite", sprite: mustyIdle, scale: 2 };
+/**
+ * Tokens are little pixel mustangs (owner request, 2026-10-27): Musty's head and a four-legged
+ * horse (owner request, 2026-10-28), alternating, each through its own frames.
+ */
+export const tokenVisual: TokenVisual = {
+  kind: "sprites",
+  sprites: [mustyIdle, horseTrot],
+  scale: 2,
+};
 
 /** One drawable look for a token: a pixel frame and its palette. */
 export interface TokenVariant {
@@ -62,6 +73,33 @@ export function pixelCircle(pixels: number): Frame {
   return rows;
 }
 
+const sizeOf = (sprite: SpriteDef) => {
+  const first = sprite.frames[0] ?? [];
+  return `${first[0] === undefined ? 0 : pixelsOf(first[0]).length}×${first.length}`;
+};
+
+/** Frame 0 of every sprite, then frame 1 of every sprite that has one, and so on. */
+function interleave(sprites: readonly SpriteDef[]): TokenVariant[] {
+  // Every variant is drawn into one frame size and collides with one radius.
+  const [first] = sprites;
+  const odd = sprites.find((sprite) => sizeOf(sprite) !== sizeOf(first!));
+  if (first && odd) {
+    throw new Error(
+      `Token sprites must share one size: ${first.name} is ${sizeOf(first)}, ` +
+        `${odd.name} is ${sizeOf(odd)}.`,
+    );
+  }
+  const variants: TokenVariant[] = [];
+  const longest = Math.max(0, ...sprites.map((sprite) => sprite.frames.length));
+  for (let i = 0; i < longest; i++) {
+    for (const { frames, palette } of sprites) {
+      const frame = frames[i];
+      if (frame) variants.push({ frame, palette });
+    }
+  }
+  return variants;
+}
+
 export function tokenArt(visual: TokenVisual): TokenArt {
   const scale = Math.max(1, Math.round(visual.scale));
   let variants: TokenVariant[];
@@ -72,7 +110,7 @@ export function tokenArt(visual: TokenVisual): TokenArt {
       palette: { [FILL]: color, [RIM]: "var(--color-ink)" },
     }));
   } else {
-    variants = visual.sprite.frames.map((frame) => ({ frame, palette: visual.sprite.palette }));
+    variants = interleave(visual.kind === "sprite" ? [visual.sprite] : visual.sprites);
   }
   const first = variants[0]?.frame ?? [];
   const width = first[0] === undefined ? 0 : pixelsOf(first[0]).length;
