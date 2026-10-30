@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": [
+      "./node_modules/.wrangler-types/worker-configuration.d.ts",
+      "@cloudflare/vitest-plugin/types"
+    ],
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}
