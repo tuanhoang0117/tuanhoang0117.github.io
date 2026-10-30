@@ -32,16 +32,59 @@ export const MAX_HALF_DEPTH = 4;
 /** Half-depth gained per pixel of distance from the silhouette's edge. */
 const DEPTH_PER_PIXEL = 0.8;
 
-/** One full turn takes this long, so the spin reads as slow and calm. */
+/** One full turn takes this long at the base speed, so the spin reads as slow and calm. */
 export const SPIN_SECONDS = 12;
-/** The still pose (reduced motion, and where the spin starts): three-quarter, muzzle toward the viewer. */
-export const REST_ANGLE = Math.PI / 4;
+/**
+ * How fast the spin's phase advances, in radians a second. The angle the model shows is the
+ * phase eased by `easeTurn`. Kept apart from the easing so a caller can scale it (a click boost)
+ * without changing where the model lingers.
+ */
+export const SPIN_BASE_SPEED = (2 * Math.PI) / SPIN_SECONDS;
 
-/** The model's angle after `seconds` of spinning, in radians, 0 ≤ angle < 2π. */
+/** The model reads as Musty within this many radians of either profile (0 and π). */
+export const PROFILE_WINDOW = Math.PI / 6;
+/** The share of each turn the model spends inside `PROFILE_WINDOW` of a profile. */
+export const PROFILE_SHARE = 0.7;
+/**
+ * The easing's squash: the turn follows a point going evenly round an ellipse this many times as
+ * deep as it is wide, seen from above. Chosen so the angle stays within `PROFILE_WINDOW` of a
+ * profile for exactly `PROFILE_SHARE` of the phase.
+ */
+const SQUASH = Math.tan(PROFILE_WINDOW) / Math.tan((PROFILE_SHARE * Math.PI) / 2);
+
+const TURN = 2 * Math.PI;
+const wrap = (angle: number) => {
+  const a = angle % TURN;
+  return a < 0 ? a + TURN : a;
+};
+
+/**
+ * The angle (radians, 0 ≤ angle < 2π) the model shows at spin phase `phase`. Phase advances
+ * evenly; the angle eases so it is slow near the profiles (0 and π), where the model reads as
+ * Musty, and quick through edge-on (π/2 and 3π/2), where it is a thin sliver. It moves forward
+ * at every phase (its rate is SQUASH at a profile and 1/SQUASH edge-on, never 0) and has no
+ * jumps: angle = atan2(SQUASH·sin(phase), cos(phase)). The two agree at every quarter turn.
+ */
+export function easeTurn(phase: number): number {
+  return wrap(Math.atan2(SQUASH * Math.sin(phase), Math.cos(phase)));
+}
+
+/** The phase that shows `angle` (the inverse of `easeTurn`), 0 ≤ phase < 2π. */
+export function phaseOf(angle: number): number {
+  return wrap(Math.atan2(Math.sin(angle), SQUASH * Math.cos(angle)));
+}
+
+/**
+ * The still pose (reduced motion, and where the spin starts): about 20° from side-on, muzzle
+ * toward the viewer. Near profile, where the model reads as Musty, with enough turn to show depth.
+ */
+export const REST_ANGLE = (20 * Math.PI) / 180;
+/** The spin phase at which the model shows `REST_ANGLE`. */
+export const REST_PHASE = phaseOf(REST_ANGLE);
+
+/** The model's angle after `seconds` of spinning at the base speed, in radians, 0 ≤ angle < 2π. */
 export function spinAngle(seconds: number): number {
-  const turn = 2 * Math.PI;
-  const angle = (REST_ANGLE + (seconds / SPIN_SECONDS) * turn) % turn;
-  return angle < 0 ? angle + turn : angle;
+  return easeTurn(REST_PHASE + seconds * SPIN_BASE_SPEED);
 }
 
 /** Same surface brightness as the flat placeholder: dark features, light mane, mid coat. */

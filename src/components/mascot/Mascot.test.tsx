@@ -41,11 +41,11 @@ describe("Mascot", () => {
     expect(env.pendingFrames()).toBe(1);
   });
 
-  it("spins the model slowly, so the silhouette it draws changes", async () => {
+  it("spins the model through a full turn, lingering near the profiles", async () => {
     render(<Mascot />);
     await settle();
-    // The spin starts from the three-quarter rest pose.
-    expect(canvas().dataset.angle).toBe("45");
+    // The spin starts from the rest pose, about 20° from side-on.
+    expect(canvas().dataset.angle).toBe("20");
     // Which cells are painted: the silhouette. The wave changes glyphs every frame; only the
     // turning model changes this.
     const silhouette = () =>
@@ -54,22 +54,39 @@ describe("Mascot", () => {
         .sort()
         .join(" ");
 
-    const angles: number[] = [];
-    let previous = "";
-    for (let i = 0; i < 12; i++) {
+    // One full turn (12 s) in tenths of a second. Per step: the angle it started from and how far
+    // it went, in whole degrees as `data-angle` reports them.
+    const steps: { from: number; turned: number }[] = [];
+    const silhouettes = new Set<string>();
+    let angle = 20;
+    for (let i = 0; i < 120; i++) {
       env.drawImage.mockClear();
       act(() => env.runFrame(100));
-      angles.push(Number(canvas().dataset.angle));
-      const now = silhouette();
-      if (i > 0) expect(now, `frame ${i} draws the turned model`).not.toBe(previous);
-      previous = now;
+      const next = Number(canvas().dataset.angle);
+      steps.push({ from: angle, turned: (next - angle + 360) % 360 });
+      silhouettes.add(silhouette());
+      angle = next;
     }
-    // Always forward, a few degrees per tenth of a second: about 30° a second.
-    for (let i = 1; i < angles.length; i++) {
-      expect(angles[i]! - angles[i - 1]!).toBeGreaterThan(0);
-      expect(angles[i]! - angles[i - 1]!).toBeLessThanOrEqual(4);
-    }
-    expect(angles.at(-1)! - 45).toBeGreaterThan(20);
+    // Always forward (rounding to whole degrees can hide a step at the slowest point, never
+    // reverse one), and all the way round.
+    for (const { turned } of steps) expect(turned).toBeLessThan(180);
+    const total = steps.reduce((sum, { turned }) => sum + turned, 0);
+    expect(total).toBeGreaterThanOrEqual(358);
+    expect(total).toBeLessThanOrEqual(362);
+    // The glyphs follow the model: the painted outline changes many times over the turn.
+    expect(silhouettes.size).toBeGreaterThan(30);
+
+    // Average degrees per step near a profile (0°/180°) and near edge-on (90°/270°).
+    const offProfile = (a: number) => Math.min(a % 180, 180 - (a % 180));
+    const rate = (keep: (a: number) => boolean) => {
+      const picked = steps.filter(({ from }) => keep(from));
+      expect(picked.length).toBeGreaterThan(0);
+      return picked.reduce((sum, { turned }) => sum + turned, 0) / picked.length;
+    };
+    const nearProfile = rate((a) => offProfile(a) <= 15);
+    const nearEdge = rate((a) => offProfile(a) >= 75);
+    expect(nearProfile).toBeGreaterThan(0);
+    expect(nearProfile * 4).toBeLessThan(nearEdge);
   });
 
   it("sizes the backing store to the device pixel ratio, so glyphs aren't upscaled", async () => {
@@ -198,14 +215,14 @@ describe("Mascot with reduced motion", () => {
     expect(env.pendingFrames()).toBe(0);
   });
 
-  it("holds the model still at the three-quarter angle instead of spinning", async () => {
+  it("holds the model still near side-on (20°) instead of spinning", async () => {
     render(<Mascot />);
     await settle();
-    expect(canvas().dataset.angle).toBe("45");
+    expect(canvas().dataset.angle).toBe("20");
     const drawn = env.drawImage.mock.calls.length;
     expect(drawn).toBeGreaterThan(0);
     act(() => env.runFrame(1000));
-    expect(canvas().dataset.angle).toBe("45");
+    expect(canvas().dataset.angle).toBe("20");
     expect(env.drawImage.mock.calls.length).toBe(drawn);
   });
 

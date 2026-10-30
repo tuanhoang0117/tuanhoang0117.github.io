@@ -16,7 +16,7 @@ import {
   type Raster,
 } from "./sampling";
 import { resolveMascotFrames, type MascotFrames } from "./source";
-import { createRaster, spinAngle } from "./voxel";
+import { createRaster, easeTurn, REST_ANGLE, REST_PHASE, SPIN_BASE_SPEED } from "./voxel";
 
 /** Share of the canvas's shorter side the mascot covers, leaving room for parallax to move. */
 const COVER = 0.94;
@@ -88,6 +88,8 @@ export function startMascotRenderer(
   // A spinning model is drawn into this renderer's own raster, and only when its angle changes.
   let turned: Raster | null = null;
   let turnedAngle = NaN;
+  // The spin's phase. It advances at the base speed and is eased into the angle the model shows.
+  let spinPhase = REST_PHASE;
 
   // Grid, rebuilt on resize. Positions are in device pixels; u/v index the source; sx/sy place
   // the cell on the canvas (0–1) for the wave and the pointer distance.
@@ -186,10 +188,10 @@ export function startMascotRenderer(
   // it holds its still pose (`idle`), which is already drawn.
   const currentRaster = (resolved: MascotFrames): Raster => {
     if (!resolved.turn || reducedMotion) {
-      if (resolved.turn) canvas.dataset.angle = degrees(spinAngle(0));
+      if (resolved.turn) canvas.dataset.angle = degrees(REST_ANGLE);
       return active ? resolved.active : resolved.idle;
     }
-    const angle = spinAngle(motion.time);
+    const angle = easeTurn(spinPhase);
     turned ??= createRaster(resolved.idle.width);
     if (angle !== turnedAngle) {
       resolved.turn(angle, turned);
@@ -261,6 +263,7 @@ export function startMascotRenderer(
     const seconds = lastTick === 0 ? 1 / profile.fps : Math.min(0.1, (now - lastTick) / 1000);
     lastTick = now;
     motion = stepMotion(motion, targetX, targetY, seconds);
+    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED) % (2 * Math.PI);
     draw();
   };
 

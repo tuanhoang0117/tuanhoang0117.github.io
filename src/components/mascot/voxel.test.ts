@@ -5,9 +5,13 @@ import { artToRaster, SILHOUETTE_SPAN } from "./source";
 import {
   buildVoxelModel,
   createRaster,
+  easeTurn,
   MAX_HALF_DEPTH,
+  phaseOf,
   renderVoxels,
   REST_ANGLE,
+  REST_PHASE,
+  SPIN_BASE_SPEED,
   SPIN_SECONDS,
   spinAngle,
 } from "./voxel";
@@ -64,16 +68,72 @@ describe("buildVoxelModel", () => {
   });
 });
 
+const DEG = Math.PI / 180;
+/** Degrees from `angle` (radians) to the nearer profile, 0° or 180°. */
+const offProfile = (angle: number) => {
+  const d = (angle / DEG) % 180;
+  return Math.min(d, 180 - d);
+};
+/** Degrees turned forward from `a` to `b` (radians), 0–360. */
+const forward = (a: number, b: number) => ((((b - a) / DEG) % 360) + 360) % 360;
+
 describe("spinAngle", () => {
-  it("starts at the three-quarter rest pose and turns once per SPIN_SECONDS", () => {
+  it("starts at the rest pose, about 20° from side-on, and turns once per SPIN_SECONDS", () => {
+    expect(REST_ANGLE / DEG).toBeCloseTo(20);
     expect(spinAngle(0)).toBeCloseTo(REST_ANGLE);
-    expect(REST_ANGLE).toBeCloseTo(Math.PI / 4);
-    expect(spinAngle(SPIN_SECONDS / 4)).toBeCloseTo(REST_ANGLE + Math.PI / 2);
     expect(spinAngle(SPIN_SECONDS)).toBeCloseTo(REST_ANGLE);
+    expect(spinAngle(2 * SPIN_SECONDS)).toBeCloseTo(REST_ANGLE);
     for (let t = 0; t < 30; t += 0.7) {
       expect(spinAngle(t)).toBeGreaterThanOrEqual(0);
       expect(spinAngle(t)).toBeLessThan(2 * Math.PI);
     }
+  });
+
+  it("lingers within ±30° of a profile for about 70% of each turn", () => {
+    const samples = 7200;
+    let near = 0;
+    for (let i = 0; i < samples; i++) {
+      if (offProfile(spinAngle((i / samples) * SPIN_SECONDS)) <= 30) near++;
+    }
+    // A constant rate would spend a third of the turn there.
+    expect(near / samples).toBeGreaterThan(0.67);
+    expect(near / samples).toBeLessThan(0.73);
+  });
+
+  it("is slow near the profiles and quick through edge-on", () => {
+    const rateAt = (angle: number) => {
+      const t = (phaseOf(angle) - REST_PHASE) / SPIN_BASE_SPEED;
+      return forward(spinAngle(t), spinAngle(t + 0.01)) / 0.01;
+    };
+    const average = 360 / SPIN_SECONDS;
+    for (const profile of [0, 180]) expect(rateAt(profile * DEG)).toBeLessThan(average / 2);
+    for (const edge of [90, 270]) expect(rateAt(edge * DEG)).toBeGreaterThan(average * 2);
+  });
+
+  it("always moves forward, smoothly, with no stops or jumps", () => {
+    // 120 steps a second, over two turns. The slowest point still moves; the fastest moves less
+    // than a degree a step, so nothing jumps.
+    const step = 1 / 120;
+    let total = 0;
+    for (let t = 0; t < 2 * SPIN_SECONDS; t += step) {
+      const turned = forward(spinAngle(t), spinAngle(t + step));
+      expect(turned, `at ${t.toFixed(3)}s`).toBeGreaterThan(0.05);
+      expect(turned, `at ${t.toFixed(3)}s`).toBeLessThan(1);
+      total += turned;
+    }
+    expect(total).toBeCloseTo(720, 0);
+  });
+
+  it("eases a separate, evenly advancing phase, so the speed can be scaled on its own", () => {
+    expect(SPIN_BASE_SPEED * SPIN_SECONDS).toBeCloseTo(2 * Math.PI);
+    for (let t = 0; t < 30; t += 0.9) {
+      expect(spinAngle(t)).toBeCloseTo(easeTurn(REST_PHASE + t * SPIN_BASE_SPEED));
+    }
+    // The easing keeps the quarter turns where they are, and phaseOf undoes it.
+    for (const quarter of [0, 1, 2, 3]) {
+      expect(easeTurn((quarter * Math.PI) / 2)).toBeCloseTo((quarter * Math.PI) / 2);
+    }
+    for (let a = 0; a < 2 * Math.PI; a += 0.3) expect(easeTurn(phaseOf(a))).toBeCloseTo(a);
   });
 });
 
@@ -171,7 +231,8 @@ describe("renderVoxels", () => {
       return sum / count;
     };
     // At +45° the sprite's face turns to the left, toward the light; at −45° to the right, away.
-    expect(mean(render(REST_ANGLE)) - mean(render(-REST_ANGLE))).toBeGreaterThan(0.05);
+    const quarter = Math.PI / 4;
+    expect(mean(render(quarter)) - mean(render(-quarter))).toBeGreaterThan(0.05);
   });
 
   it("shades the face as rounded, not as a flat slab", () => {

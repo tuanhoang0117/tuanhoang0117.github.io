@@ -72,17 +72,49 @@ test.describe("/lab/mascot", () => {
     expect(perSecond).toBeGreaterThanOrEqual(20);
   });
 
-  test("the model spins slowly, and the drawn silhouette turns with it", async ({ page }) => {
+  test("the model spins, and the drawn silhouette turns with it", async ({ page }) => {
     await expect(canvas(page)).toHaveAttribute("data-state", "running");
     const before = await spinState(page);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1500);
     const after = await spinState(page);
-    // About 30° a second (one turn in 12 s). A loose range: a busy runner draws fewer frames.
-    const turned = turnedBy(before.angle, after.angle);
-    expect(turned).toBeGreaterThan(10);
-    expect(turned).toBeLessThan(90);
+    // The slowest point of the turn is about 9° a second, so 1.5 s always moves it.
+    expect(turnedBy(before.angle, after.angle)).toBeGreaterThan(5);
     // The glyphs on the canvas follow the model: its outline moved, not just a number.
     expect([after.left, after.right]).not.toEqual([before.left, before.right]);
+  });
+
+  test("the spin lingers near the profiles and hurries through edge-on", async ({ page }) => {
+    await expect(canvas(page)).toHaveAttribute("data-state", "running");
+    // Sampled inside the page every 100 ms for 7 s. The spin starts at 20° and reaches 90°
+    // (edge-on) and 180° (the other profile) within the first 6 s of a 12 s turn.
+    const steps = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+      const out: { from: number; turned: number; seconds: number }[] = [];
+      let angle = Number(c.dataset.angle);
+      let time = performance.now();
+      for (let i = 0; i < 70; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const next = Number(c.dataset.angle);
+        const now = performance.now();
+        out.push({ from: angle, turned: (next - angle + 360) % 360, seconds: (now - time) / 1000 });
+        angle = next;
+        time = now;
+      }
+      return out;
+    });
+    // Always forward: a step backwards would read as nearly a whole turn.
+    for (const { turned } of steps) expect(turned).toBeLessThan(180);
+    // Degrees a second near a profile (0°/180°) and near edge-on (90°/270°).
+    const offProfile = (a: number) => Math.min(a % 180, 180 - (a % 180));
+    const rate = (keep: (a: number) => boolean) => {
+      const picked = steps.filter(({ from }) => keep(from));
+      expect(picked.length, "the samples should cover this part of the turn").toBeGreaterThan(0);
+      const degrees = picked.reduce((sum, { turned }) => sum + turned, 0);
+      return degrees / picked.reduce((sum, { seconds }) => sum + seconds, 0);
+    };
+    const nearProfile = rate((a) => offProfile(a) <= 20);
+    const nearEdge = rate((a) => offProfile(a) >= 70);
+    expect(nearProfile).toBeGreaterThan(0);
+    expect(nearProfile * 3).toBeLessThan(nearEdge);
   });
 
   test("a click fires onActivate at the pointer", async ({ page }) => {
@@ -222,10 +254,10 @@ test.describe("/lab/mascot with reduced motion", () => {
     expect(await framesDrawn(page)).toBe(settled);
   });
 
-  test("holds the model still at a three-quarter angle", async ({ page }) => {
+  test("holds the model still near side-on, at 20°", async ({ page }) => {
     await expect(canvas(page)).toHaveAttribute("data-state", "static");
     const first = await spinState(page);
-    expect(first.angle).toBe(45);
+    expect(first.angle).toBe(20);
     expect(first.right).toBeGreaterThan(first.left);
     await page.waitForTimeout(1000);
     expect(await spinState(page)).toEqual(first);
@@ -269,7 +301,8 @@ test.describe("the spinning mascot on the home page", () => {
       });
       // The same budget as the lab's frame-rate test: 20 frames a second on a busy runner.
       expect(perSecond).toBeGreaterThanOrEqual(20);
-      expect(turned).toBeGreaterThan(10);
+      // Spinning: even the slowest point of the turn, about 9° a second, moves this far.
+      expect(turned).toBeGreaterThan(5);
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
