@@ -1,0 +1,18 @@
+// Shared mascot click counter (ADR 0004, issue #97).
+// No account ID or token belongs here: `npx wrangler login` supplies the account at deploy time.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "musty-counter",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {
+    // Must stay "false" here, which is what `wrangler deploy` uploads. `npm run dev` turns it on
+    // for local development only (`wrangler dev --var ALLOW_DEV_ORIGINS:true`).
+    "ALLOW_DEV_ORIGINS": "false",
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }],
+}
