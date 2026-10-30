@@ -13,8 +13,10 @@ import {
   sampleAt,
   stepMotion,
   type Motion,
+  type Raster,
 } from "./sampling";
 import { resolveMascotFrames, type MascotFrames } from "./source";
+import { createRaster, easeTurn, REST_ANGLE, REST_PHASE, SPIN_BASE_SPEED } from "./voxel";
 
 /** Share of the canvas's shorter side the mascot covers, leaving room for parallax to move. */
 const COVER = 0.94;
@@ -29,6 +31,9 @@ function deviceProfile() {
   const low = (nav.deviceMemory ?? 8) < 4 || (nav.hardwareConcurrency ?? 8) < 4;
   return low ? { fps: 30, maxDpr: 1.5 } : { fps: 60, maxDpr: 3 };
 }
+
+/** An angle in radians as whole degrees (0–359), for `data-angle`. */
+const degrees = (radians: number) => String(Math.round((radians * 180) / Math.PI) % 360);
 
 /** Lifecycle as seen from outside, written to `data-state` on the canvas for tests and debugging. */
 export type RendererState = "loading" | "running" | "paused" | "static" | "unsupported";
@@ -80,6 +85,11 @@ export function startMascotRenderer(
   let raf = 0;
   let lastTick = 0;
   let drawn = 0;
+  // A spinning model is drawn into this renderer's own raster, and only when its angle changes.
+  let turned: Raster | null = null;
+  let turnedAngle = NaN;
+  // The spin's phase. It advances at the base speed and is eased into the angle the model shows.
+  let spinPhase = REST_PHASE;
 
   // Grid, rebuilt on resize. Positions are in device pixels; u/v index the source; sx/sy place
   // the cell on the canvas (0–1) for the wave and the pointer distance.
@@ -174,10 +184,27 @@ export function startMascotRenderer(
     return true;
   };
 
+  // The raster to sample this frame. A model spins with the animation clock; with reduced motion
+  // it holds its still pose (`idle`), which is already drawn.
+  const currentRaster = (resolved: MascotFrames): Raster => {
+    if (!resolved.turn || reducedMotion) {
+      if (resolved.turn) canvas.dataset.angle = degrees(REST_ANGLE);
+      return active ? resolved.active : resolved.idle;
+    }
+    const angle = easeTurn(spinPhase);
+    turned ??= createRaster(resolved.idle.width);
+    if (angle !== turnedAngle) {
+      resolved.turn(angle, turned);
+      turnedAngle = angle;
+      canvas.dataset.angle = degrees(angle);
+    }
+    return turned;
+  };
+
   const draw = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!frames || !atlas || cells === 0) return;
-    const raster = active ? frames.active : frames.idle;
+    const raster = currentRaster(frames);
     const shiftX = (motion.pointerX - 0.5) * 2 * PARALLAX;
     const shiftY = (motion.pointerY - 0.5) * 2 * PARALLAX;
     const counts = new Int32Array(ALPHA_LEVELS);
@@ -236,6 +263,7 @@ export function startMascotRenderer(
     const seconds = lastTick === 0 ? 1 / profile.fps : Math.min(0.1, (now - lastTick) / 1000);
     lastTick = now;
     motion = stepMotion(motion, targetX, targetY, seconds);
+    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED) % (2 * Math.PI);
     draw();
   };
 
