@@ -101,20 +101,105 @@ test("the mustang invites a press and counts click, Enter, and Space", async ({
   // The same presses still drop tokens.
   await expect(overlay(page)).toHaveAttribute("data-tokens", "3");
 
-  // Prompt above the mustang, counter below it, neither on top of it.
+  // Prompt and counter both above the mustang, side by side on one line, apart from each other.
+  // Tokens pile up at the bottom of the window, so nothing may sit under the mustang.
   await settleEntrances(page);
   const button = await box(mascot(page));
   const promptBox = await box(prompt);
   const counterBox = await box(counter(page));
   expect(promptBox.y + promptBox.height, "prompt above the mustang").toBeLessThanOrEqual(button.y);
-  expect(counterBox.y, "counter below the mustang").toBeGreaterThanOrEqual(
-    button.y + button.height,
+  expect(counterBox.y + counterBox.height, "counter above the mustang").toBeLessThanOrEqual(
+    button.y,
   );
+  expect(overlap(promptBox, counterBox), "prompt/counter").toBe(0);
+  expect(Math.abs(promptBox.y - counterBox.y), "prompt and counter share a line").toBeLessThan(2);
 
   // Local only: a fresh visit starts from zero.
   await page.reload();
   await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 0`);
 });
+
+/** The topmost row with token paint on the physics canvas, in CSS px (Infinity if none). */
+function tokenTop(page: Page) {
+  return overlay(page).evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const { data, width, height } = canvas
+      .getContext("2d")!
+      .getImageData(0, 0, canvas.width, canvas.height);
+    const scale = canvas.width / canvas.clientWidth;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] !== 0) return y / scale;
+      }
+    }
+    return Infinity;
+  });
+}
+
+/** Token paint inside a box on the physics canvas, in device pixels. */
+function tokenPaintIn(page: Page, area: Box) {
+  return overlay(page).evaluate((el, area) => {
+    const canvas = el as HTMLCanvasElement;
+    const scale = canvas.width / canvas.clientWidth;
+    const x = Math.max(0, Math.floor(area.x * scale));
+    const y = Math.max(0, Math.floor(area.y * scale));
+    const w = Math.min(canvas.width - x, Math.ceil(area.width * scale));
+    const h = Math.min(canvas.height - y, Math.ceil(area.height * scale));
+    if (w <= 0 || h <= 0) return 0;
+    const { data } = canvas.getContext("2d")!.getImageData(x, y, w, h);
+    let painted = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) painted++;
+    return painted;
+  }, area);
+}
+
+for (const [width, height] of [
+  [1280, 800],
+  [1366, 768],
+  [1440, 900],
+  [1920, 1080],
+] as const) {
+  test(`at ${width}x${height} settled tokens never cover the prompt or counter`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "The mustang mounts only at xl and above");
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(mascot(page)).toBeVisible();
+    await settleEntrances(page);
+    const group = page.getByRole("group", { name: mascotLabel });
+    const prompt = group.getByText(mascotPrompt, { exact: true });
+
+    // Press where a visitor would, without scrolling. Locator clicks retry with a fresh scroll when
+    // the press animation makes the button "not stable", which would measure a scrolled page.
+    const target = await box(mascot(page));
+    const presses = 8;
+    for (let i = 0; i < presses; i++) {
+      await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+    }
+    expect(await page.evaluate(() => window.scrollY), "the page did not scroll").toBe(0);
+    await expect(counter(page)).toHaveText(`${mascotCounterLabel}: ${presses}`);
+    await expect(overlay(page)).toHaveAttribute("data-tokens", String(presses));
+    // The loop stops once every token sleeps; only then is the pile where it will stay.
+    await expect(overlay(page)).toHaveAttribute("data-resting", "true", { timeout: 20_000 });
+    await settleEntrances(page);
+
+    const top = await tokenTop(page);
+    expect(top, "tokens were drawn").toBeLessThan(height);
+    for (const [name, locator] of [
+      ["counter", counter(page)],
+      ["prompt", prompt],
+    ] as const) {
+      const b = await box(locator);
+      // In view, so "not covered" means the visitor can read it, not that it is off screen.
+      expect.soft(b.y, `${name} in view`).toBeGreaterThanOrEqual(0);
+      expect.soft(b.y + b.height, `${name} in view`).toBeLessThanOrEqual(height);
+      expect.soft(b.y + b.height, `${name} above every settled token`).toBeLessThanOrEqual(top);
+      expect.soft(await tokenPaintIn(page, b), `token paint on the ${name}`).toBe(0);
+    }
+  });
+}
 
 test("under reduced motion the counter still counts and nothing moves", async ({
   page,

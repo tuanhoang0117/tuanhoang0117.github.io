@@ -13,9 +13,10 @@ interface HomeMascotProps {
 }
 
 /**
- * The home page's mustang: a "Click me" prompt above it and a local press counter under it. The
- * counter counts every click, tap, Enter, and Space on this page only (it starts at 0 on each
- * visit) and is a polite live region, so screen readers hear the new total without losing focus.
+ * The home page's mustang, with a "Click me" prompt and a local press counter on one line above
+ * it. The counter counts every click, tap, Enter, and Space on this page only (it starts at 0 on
+ * each visit) and is a polite live region, so screen readers hear the new total without losing
+ * focus.
  */
 export function HomeMascot({ onActivate }: HomeMascotProps) {
   const reduced = useReducedMotion();
@@ -41,18 +42,18 @@ export function HomeMascot({ onActivate }: HomeMascotProps) {
           Click or press Enter or Space to drop tokens.
         </p>
       )}
-      <p data-mascot-prompt="" className={`label-mono text-center font-bold ${theme.accentText}`}>
-        {mascotPrompt}
-      </p>
+      {/* Prompt and counter share one line above the head. Tokens fall to the bottom of the
+          window and pile up there, so anything under the mustang would end up buried. */}
+      <div className="label-mono flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 font-bold">
+        <p data-mascot-prompt="" className={theme.accentText}>
+          {mascotPrompt}
+        </p>
+        <span aria-hidden="true">/</span>
+        <p data-mascot-counter="" aria-live="polite" aria-atomic="true" className="tabular-nums">
+          {mascotCounterLabel}: {count}
+        </p>
+      </div>
       <Mascot onActivate={activate} className="mt-2" />
-      <p
-        data-mascot-counter=""
-        aria-live="polite"
-        aria-atomic="true"
-        className="label-mono mt-2 text-center font-bold tabular-nums"
-      >
-        {mascotCounterLabel}: {count}
-      </p>
     </div>
   );
 }

@@ -52,4 +52,12 @@ describe("HomeMascot", () => {
     expect(counter()).toHaveAttribute("aria-live", "polite");
     expect(counter()).toHaveAttribute("aria-atomic", "true");
   });
+
+  it("puts the prompt and counter before the mustang, so they read and sit above it", () => {
+    render(<HomeMascot />);
+    const button = screen.getByRole("button", { name: mascotLabel });
+    for (const el of [screen.getByText(mascotPrompt, { exact: true }), counter()]) {
+      expect(el.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
 });
