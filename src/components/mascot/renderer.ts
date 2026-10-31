@@ -32,8 +32,8 @@ function deviceProfile() {
   return low ? { fps: 30, maxDpr: 1.5 } : { fps: 60, maxDpr: 3 };
 }
 
-/** An angle in radians as whole degrees (0–359), for `data-angle`. */
-const degrees = (radians: number) => String(Math.round((radians * 180) / Math.PI) % 360);
+/** An angle in radians as whole degrees (0–359): what `data-angle` shows and the model turns to. */
+const wholeDegrees = (radians: number) => Math.round((radians * 180) / Math.PI) % 360;
 
 /** Lifecycle as seen from outside, written to `data-state` on the canvas for tests and debugging. */
 export type RendererState = "loading" | "running" | "paused" | "static" | "unsupported";
@@ -85,9 +85,12 @@ export function startMascotRenderer(
   let raf = 0;
   let lastTick = 0;
   let drawn = 0;
-  // A spinning model is drawn into this renderer's own raster, and only when its angle changes.
+  // A spinning model is drawn into this renderer's own raster, turned to whole degrees, and only
+  // when that whole-degree angle changes. The eased angle is a fresh float every frame, so
+  // comparing it unrounded would redraw the model on every frame; near the profiles the angle
+  // moves a fraction of a degree a frame, so most frames there reuse the last turn.
   let turned: Raster | null = null;
-  let turnedAngle = NaN;
+  let turnedDegrees = NaN;
   // The spin's phase. It advances at the base speed and is eased into the angle the model shows.
   let spinPhase = REST_PHASE;
 
@@ -188,15 +191,15 @@ export function startMascotRenderer(
   // it holds its still pose (`idle`), which is already drawn.
   const currentRaster = (resolved: MascotFrames): Raster => {
     if (!resolved.turn || reducedMotion) {
-      if (resolved.turn) canvas.dataset.angle = degrees(REST_ANGLE);
+      if (resolved.turn) canvas.dataset.angle = String(wholeDegrees(REST_ANGLE));
       return active ? resolved.active : resolved.idle;
     }
-    const angle = easeTurn(spinPhase);
+    const angle = wholeDegrees(easeTurn(spinPhase));
     turned ??= createRaster(resolved.idle.width);
-    if (angle !== turnedAngle) {
-      resolved.turn(angle, turned);
-      turnedAngle = angle;
-      canvas.dataset.angle = degrees(angle);
+    if (angle !== turnedDegrees) {
+      resolved.turn((angle * Math.PI) / 180, turned);
+      turnedDegrees = angle;
+      canvas.dataset.angle = String(angle);
     }
     return turned;
   };
