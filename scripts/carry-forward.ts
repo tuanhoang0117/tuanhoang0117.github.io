@@ -27,6 +27,16 @@ const LABEL: Record<Context, string> = { "agent/qa": "QA report", "agent/review"
 // GitHub's compare API lists at most 300 files; past that we can't prove every file was checked.
 const COMPARE_FILE_LIMIT = 300;
 const BODY_DELIMITER = "CARRY_FORWARD_BODY";
+// Only verdicts the agents posted themselves can be carried: the bot account, with the exact
+// verdict prefix the agent definitions publish (.claude/agents/qa.md, reviewer.md). A combined
+// agent appends a note, as in "QA: PASS (combined medium-tier agent, ...)". Anything else, such as
+// Tuan's "Override by Tuan: ..." or "No agent run: ...", or a status that was itself carried, is
+// refused: an allow-list fails closed on wording nobody listed.
+export const BOT = "tuanhoang-bot";
+const VERDICT: Record<Context, RegExp> = {
+  "agent/qa": /^QA: PASS(\s|$)/,
+  "agent/review": /^Review: APPROVE( WITH SUGGESTIONS)?(\s|$)/,
+};
 
 /** Runs `gh <args>` (as the bot) and returns stdout. Throws on a non-zero exit. */
 export type GhRunner = (args: string[]) => string;
@@ -43,6 +53,7 @@ interface Status {
   state: string;
   description: string | null;
   target_url: string | null;
+  creator?: { login: string } | null;
 }
 
 interface CompareFile {
@@ -145,19 +156,24 @@ function apiPages<T>(gh: GhRunner, path: string): T[] {
   return JSON.parse(gh(["api", "--paginate", "--slurp", path])) as T[];
 }
 
+/**
+ * The newest agent/* status per context on a commit. Reads the full status list (every page),
+ * which GitHub returns newest first and which, unlike the combined status, says who posted each.
+ */
 function agentStatuses(gh: GhRunner, sha: string): Map<string, Status> {
-  const combined = api<{ statuses: Status[] }>(gh, `${API}/commits/${sha}/status`);
+  const all = apiPages<Status[]>(gh, `${API}/commits/${sha}/statuses?per_page=100`).flat();
   const byContext = new Map<string, Status>();
-  for (const s of combined.statuses) {
-    if ((CONTEXTS as readonly string[]).includes(s.context)) byContext.set(s.context, s);
+  for (const s of all) {
+    if (s.context.startsWith("agent/") && !byContext.has(s.context)) byContext.set(s.context, s);
   }
   return byContext;
 }
 
-/** A verdict an agent actually reached on this commit, not one carried or overridden onto it. */
-function isOwnVerdict(s: Status | undefined): boolean {
-  if (!s || s.state !== "success") return false;
-  return !/carried|override/i.test(s.description ?? "");
+/** A PASS/APPROVE the agent itself posted on this commit: not carried, overridden or Tuan's. */
+function isOwnVerdict(ctx: Context, s: Status | undefined): boolean {
+  if (!s || s.state !== "success" || s.creator?.login !== BOT) return false;
+  const description = s.description ?? "";
+  return VERDICT[ctx].test(description) && !/carried|override/i.test(description);
 }
 
 function describeStatus(s: Status | undefined): string {
@@ -235,10 +251,11 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
     }
     for (const ctx of CONTEXTS) {
       const s = oldStatuses.get(ctx);
-      if (!isOwnVerdict(s)) {
+      if (!isOwnVerdict(ctx, s)) {
         verified.lines.push(
           s?.state === "success"
-            ? `${ctx} on ${short(old)} is already carried or overridden (${describeStatus(s)}); no chains`
+            ? `${ctx} on ${short(old)} is ${describeStatus(s)} by ${s.creator?.login ?? "unknown"}, ` +
+                `not an agent's own verdict (only ${BOT}'s agent PASS/APPROVE counts; no chains)`
             : `${ctx} on ${short(old)} is ${describeStatus(s)}, not success`,
         );
       }
@@ -248,7 +265,7 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
     for (let i = headIndex - 1; i >= 0; i--) {
       const sha = commits[i] as string;
       const statuses = agentStatuses(gh, sha);
-      if (CONTEXTS.every((ctx) => isOwnVerdict(statuses.get(ctx)))) {
+      if (CONTEXTS.every((ctx) => isOwnVerdict(ctx, statuses.get(ctx)))) {
         old = sha;
         oldStatuses = statuses;
         break;
@@ -257,8 +274,8 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
     }
     if (!old) {
       verified.lines.push(
-        "no earlier commit on the PR has agent/qa and agent/review both success from the agents " +
-          "themselves (carried or overridden statuses don't count)",
+        `no earlier commit on the PR has agent/qa and agent/review both an agent's own PASS/APPROVE ` +
+          `posted by ${BOT} (carried, overridden and owner statuses don't count)`,
       );
       return { checks };
     }
@@ -291,6 +308,12 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
     filesCheck.ok = false;
     filesCheck.lines.push(`the PR changes ${COMPARE_FILE_LIMIT}+ files; too many to verify`);
   }
+  // A renamed file is also known by its old name: the base touching that name matters too.
+  const prNames = new Set<string>();
+  for (const f of [...newFiles.values(), ...oldFiles.values()]) {
+    prNames.add(f.filename);
+    if (f.previous_filename) prNames.add(f.previous_filename);
+  }
   const differing: string[] = [];
   for (const name of [...new Set([...newFiles.keys(), ...oldFiles.keys()])].sort()) {
     const n = newFiles.get(name);
@@ -311,7 +334,7 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
     }
     for (const f of baseFiles) {
       for (const name of [f.filename, f.previous_filename]) {
-        if (name && (newFiles.has(name) || oldFiles.has(name))) {
+        if (name && prNames.has(name)) {
           differing.push(`${name}: also changed on ${pr.base.ref} since ${short(old)}`);
         }
       }
@@ -376,6 +399,13 @@ function runChecks(gh: GhRunner, opts: Options): { checks: Check[]; plan?: Plan 
   };
 }
 
+/** Agent statuses on the head that aren't success: a FAIL, BLOCK or pending posted since. */
+function headObjections(gh: GhRunner, head: string): string[] {
+  return [...agentStatuses(gh, head).values()]
+    .filter((s) => s.state !== "success")
+    .map((s) => `${s.context} on ${short(head)} is now ${describeStatus(s)}`);
+}
+
 export function descriptions(old: string): Record<Context, string> {
   return {
     "agent/qa": `QA: PASS (carried forward from ${short(old)})`,
@@ -396,7 +426,7 @@ export function commentBody(plan: Plan, ownerOk: string, postedBy: string): stri
   return [
     `### Agent verdicts carried forward from \`${short(plan.old)}\` to \`${short(plan.head)}\``,
     "",
-    `**No agent ran on the new head (\`${short(plan.head)}\`).** Its \`agent/qa\` and \`agent/review\` statuses are copied from the old head, because only a merge of the base branch changed the PR.`,
+    `**No agent ran on the new head (\`${short(plan.head)}\`).** Its \`agent/qa\` and \`agent/review\` statuses are copied from the old head, because only merges of the base branch changed the branch since, leaving every file the PR changes identical.`,
     "",
     `- Old head: ${plan.old}`,
     `- New head: ${plan.head}`,
@@ -427,13 +457,17 @@ export function ownerCommands(plan: Plan, ownerOk: string): string {
   return [
     "(",
     "set -euo pipefail",
-    `head=$(gh api ${API}/pulls/${plan.pr} --jq .head.sha)`,
-    `[ "$head" = ${plan.head} ] || { echo "PR #${plan.pr} head moved to $head; not posting" >&2; exit 1; }`,
+    // Tuan may run these hours later: re-check the PR and the head's agent statuses first.
+    `pr=$(gh api ${API}/pulls/${plan.pr} --jq '.state + " " + .head.sha')`,
+    `[ "$pr" = "open ${plan.head}" ] || { echo "PR #${plan.pr} closed or head moved (now: $pr); not posting" >&2; exit 1; }`,
+    `bad=$(gh api '${API}/commits/${plan.head}/status?per_page=100' --jq '[.statuses[] | select(.context | startswith("agent/")) | select(.state != "success") | .context + " " + .state] | join(", ")')`,
+    `[ -z "$bad" ] || { echo "the head now has $bad; not posting" >&2; exit 1; }`,
     "body_file=$(mktemp)",
     `cat > "$body_file" <<'${BODY_DELIMITER}'`,
     body.replace(/\n$/, ""),
     BODY_DELIMITER,
     `url=$(gh api -X POST ${API}/issues/${plan.pr}/comments -F body=@"$body_file" --jq .html_url)`,
+    `[ -n "$url" ] || { echo "posting the comment returned no URL; not posting the statuses" >&2; exit 1; }`,
     'echo "comment: $url"',
     ...CONTEXTS.map(
       (ctx) =>
@@ -452,6 +486,11 @@ function post(io: Io, plan: Plan, ownerOk: string): number {
       `refused: PR #${plan.pr} changed during the checks (now ${now.state} at ${short(now.head.sha)}, ` +
         `checked ${short(plan.head)}); nothing posted. Run it again.`,
     );
+    return 1;
+  }
+  const objections = headObjections(io.gh, plan.head);
+  if (objections.length > 0) {
+    io.err(`refused: ${objections.join("; ")}; nothing posted.`);
     return 1;
   }
   const body = commentBody(plan, ownerOk, "tuanhoang-bot (`--post`)");

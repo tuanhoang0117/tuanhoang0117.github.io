@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { main, redact, REPO } from "./carry-forward.ts";
+import { BOT, main, redact, REPO } from "./carry-forward.ts";
 
 const API = `repos/${REPO}`;
 const FIRST = "1".repeat(40);
@@ -23,6 +23,7 @@ interface Status {
   state: string;
   description: string;
   target_url: string | null;
+  creator: { login: string };
 }
 interface File {
   filename: string;
@@ -36,16 +37,37 @@ interface Run {
   conclusion: string | null;
 }
 
+const bot = { login: BOT };
 const pass = (): Status[] => [
-  { context: "agent/qa", state: "success", description: "QA: PASS", target_url: QA_URL },
+  {
+    context: "agent/qa",
+    state: "success",
+    description: "QA: PASS",
+    target_url: QA_URL,
+    creator: bot,
+  },
   {
     context: "agent/review",
     state: "success",
     description: "Review: APPROVE",
     target_url: REVIEW_URL,
+    creator: bot,
   },
-  { context: "other/ci", state: "success", description: "unrelated", target_url: null },
+  {
+    context: "other/ci",
+    state: "success",
+    description: "unrelated",
+    target_url: null,
+    creator: bot,
+  },
 ];
+
+/** Splits a list into GitHub-style pages. */
+const pages = <T>(list: T[], size: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out.length > 0 ? out : [[]];
+};
 
 const prFiles = (): File[] => [
   { filename: "scripts/carry-forward.ts", status: "added", sha: "f1" },
@@ -56,8 +78,11 @@ const prFiles = (): File[] => [
 function world() {
   return {
     pr: { state: "open", head: HEAD, base: "v2" },
-    // The head as seen by every read after the first one (simulates a push mid-run).
+    // The head and state as seen by every read after the first one (a push or close mid-run).
     headLater: HEAD,
+    stateLater: "open",
+    // Agent statuses that appear on the head after the checks (an agent posting mid-run).
+    headStatusesLater: undefined as Status[] | undefined,
     commits: [FIRST, OLD, HEAD],
     statuses: { [FIRST]: [], [OLD]: pass(), [HEAD]: [] } as Record<string, Status[]>,
     filesAtOld: prFiles(),
@@ -67,8 +92,12 @@ function world() {
       { name: "Lint, format, typecheck, unit tests", status: "completed", conclusion: "success" },
       { name: "E2E (Playwright + axe)", status: "completed", conclusion: "success" },
     ] as Run[],
+    // Items per page for list endpoints; only reads with --paginate get past the first page.
+    pageSize: 100,
     // Set to false to drop status writes, as if GitHub lost them.
     statusesStick: true,
+    // Set to store status writes with this link instead of the one sent.
+    storedTargetUrl: undefined as string | undefined,
     throwOn: undefined as string | undefined,
   };
 }
@@ -97,37 +126,35 @@ function fakeGh(w: World) {
           context: field("context"),
           state: field("state"),
           description: field("description"),
-          target_url: field("target_url"),
+          target_url: w.storedTargetUrl ?? field("target_url"),
+          creator: bot,
         });
       }
       return "{}";
     }
     if (isWrite) throw new Error(`unexpected write ${args.join(" ")}`);
+    const list = <T>(items: T[], wrap: (page: T[]) => unknown = (p) => p) => {
+      const all = pages(items, w.pageSize).map(wrap);
+      return JSON.stringify(args.includes("--paginate") ? all : all[0]);
+    };
     if (path === `${API}/pulls/7`) {
-      const head = prReads++ === 0 ? w.pr.head : w.headLater;
+      const first = prReads++ === 0;
+      if (!first && w.headStatusesLater) w.statuses[HEAD] = w.headStatusesLater;
       return JSON.stringify({
-        state: w.pr.state,
+        state: first ? w.pr.state : w.stateLater,
         html_url: "https://github.com/x/y/pull/7",
-        head: { sha: head },
+        head: { sha: first ? w.pr.head : w.headLater },
         base: { ref: w.pr.base },
       });
     }
     if (path === `${API}/pulls/7/commits`) {
-      return JSON.stringify([w.commits.map((sha) => ({ sha }))]);
+      return list(w.commits.map((sha) => ({ sha })));
     }
-    const status = /^.*\/commits\/([0-9a-f]+)\/status$/.exec(path);
-    if (status) {
-      // The combined status endpoint returns the newest status per context.
-      const seen = new Set<string>();
-      const latest = (w.statuses[status[1] as string] ?? []).filter((s) => {
-        if (seen.has(s.context)) return false;
-        seen.add(s.context);
-        return true;
-      });
-      return JSON.stringify({ statuses: latest });
-    }
+    // The full status list, newest first, with who posted each.
+    const statuses = /\/commits\/([0-9a-f]+)\/statuses\?per_page=100$/.exec(path);
+    if (statuses) return list(w.statuses[statuses[1] as string] ?? []);
     if (path.startsWith(`${API}/commits/${HEAD}/check-runs`)) {
-      return JSON.stringify([{ check_runs: w.runs }]);
+      return list(w.runs, (page) => ({ total_count: w.runs.length, check_runs: page }));
     }
     if (path === `${API}/compare/v2...${HEAD}`) {
       return JSON.stringify({ merge_base_commit: { sha: BASE_NEW }, files: w.filesAtNew });
@@ -260,6 +287,42 @@ describe("carry-forward", () => {
     expect(r.fake.writes()).toEqual([]);
   });
 
+  it("refuses when the PR is closed between the checks and the post", () => {
+    const w = world();
+    w.stateLater = "closed";
+    const r = run(POST, w);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/changed during the checks \(now closed/);
+    expect(r.fake.writes()).toEqual([]);
+  });
+
+  it("refuses when an agent posts FAIL, BLOCK or pending on the head during the checks", () => {
+    for (const state of ["failure", "pending"]) {
+      const w = world();
+      w.headStatusesLater = [
+        {
+          context: "agent/review",
+          state,
+          description: "Review: BLOCK",
+          target_url: null,
+          creator: bot,
+        },
+      ];
+      const r = run(POST, w);
+      expect(r.code).toBe(1);
+      expect(r.err).toContain(`refused: agent/review on bbbbbbb is now ${state}`);
+      expect(r.fake.writes()).toEqual([]);
+    }
+  });
+
+  it("exits non-zero when the statuses stuck with a different link", () => {
+    const w = world();
+    w.storedTargetUrl = "https://github.com/x/y/pull/7#issuecomment-other";
+    const r = run(POST, w);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/did not stick.*agent\/qa, agent\/review/);
+  });
+
   it("refuses when the head isn't the --head commit given", () => {
     const r = run(["7", "--head", "fffffff"]);
     expect(r.code).toBe(1);
@@ -312,6 +375,54 @@ describe("carry-forward", () => {
     expect(r.fake.writes()).toEqual([]);
   });
 
+  it("compares a renamed file by its old name too", () => {
+    const w = world();
+    const renamed = (from: string): File => ({
+      filename: "scripts/x.ts",
+      status: "renamed",
+      sha: "same",
+      previous_filename: from,
+    });
+    w.filesAtOld = [...prFiles(), renamed("scripts/y.ts")];
+    w.filesAtNew = [...prFiles(), renamed("scripts/z.ts")];
+    const r = run(POST, w);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("scripts/x.ts: differs between the two heads");
+    expect(r.fake.writes()).toEqual([]);
+  });
+
+  it("refuses when the base renamed a PR file away, or touched a PR rename's old name", () => {
+    // The base renamed one of the PR's files to a new name.
+    const away = world();
+    away.baseChanged = [
+      {
+        filename: "docs/moved.md",
+        status: "renamed",
+        sha: "f2",
+        previous_filename: "docs/agent-workflow.md",
+      },
+    ];
+    const a = run(POST, away);
+    expect(a.code).toBe(1);
+    expect(a.out).toContain("docs/agent-workflow.md: also changed on v2 since aaaaaaa");
+
+    // The PR renames y.ts to x.ts; the base edited y.ts in the meantime.
+    const oldName = world();
+    const rename: File = {
+      filename: "scripts/x.ts",
+      status: "renamed",
+      sha: "same",
+      previous_filename: "scripts/y.ts",
+    };
+    oldName.filesAtOld = [...prFiles(), rename];
+    oldName.filesAtNew = [...prFiles(), rename];
+    oldName.baseChanged = [{ filename: "scripts/y.ts", status: "modified", sha: "z" }];
+    const b = run(POST, oldName);
+    expect(b.code).toBe(1);
+    expect(b.out).toContain("scripts/y.ts: also changed on v2 since aaaaaaa");
+    expect([...a.fake.writes(), ...b.fake.writes()]).toEqual([]);
+  });
+
   it("refuses when the old statuses aren't both success", () => {
     const w = world();
     w.statuses[OLD] = pass().map((s) =>
@@ -338,21 +449,99 @@ describe("carry-forward", () => {
       expect(auto.code).toBe(1);
       const named = run([...POST, "--old", OLD], w);
       expect(named.code).toBe(1);
-      expect(named.out).toContain("already carried or overridden");
+      expect(named.out).toContain("not an agent's own verdict");
       expect([...auto.fake.writes(), ...named.fake.writes()]).toEqual([]);
     }
   });
 
-  it("refuses when a commit after the old one has a FAIL or BLOCK", () => {
+  it("only carries a PASS/APPROVE posted by the bot in an agent's own words", () => {
+    const refused: [string, string, string][] = [
+      // [context, description, creator]
+      ["agent/qa", "No agent run: bot token expired; Tuan tested locally", "tuanhoang0117"],
+      ["agent/qa", "No agent run: bot token expired; Tuan tested locally", BOT],
+      ["agent/qa", "QA: PASS", "tuanhoang0117"],
+      ["agent/review", "Review: APPROVE", "someone-else"],
+      ["agent/qa", "lgtm", BOT],
+      ["agent/review", "Review: APPROVED", BOT],
+      ["agent/qa", "QA: PASSED", BOT],
+      ["agent/qa", "QA: PASS (carried forward from 1111111)", BOT],
+    ];
+    for (const [context, description, login] of refused) {
+      const w = world();
+      w.statuses[OLD] = pass().map((s) =>
+        s.context === context ? { ...s, description, creator: { login } } : s,
+      );
+      const auto = run(POST, w);
+      expect(auto.code, `${context} "${description}" by ${login}`).toBe(1);
+      expect(auto.out).toMatch(/no earlier commit on the PR has agent\/qa and agent\/review both/);
+      const named = run([...POST, "--old", OLD], w);
+      expect(named.code).toBe(1);
+      expect(named.out).toContain(`by ${login}, not an agent's own verdict`);
+      expect([...auto.fake.writes(), ...named.fake.writes()]).toEqual([]);
+    }
+
+    // A combined agent's note after the verdict, and APPROVE WITH SUGGESTIONS, both count.
+    for (const argv of [POST, [...POST, "--old", OLD]]) {
+      const w = world();
+      w.statuses[OLD] = pass().map((s) => ({
+        ...s,
+        description:
+          s.context === "agent/qa"
+            ? "QA: PASS (combined medium-tier agent, Claude Opus 5.5)"
+            : s.context === "agent/review"
+              ? "Review: APPROVE WITH SUGGESTIONS (combined medium-tier agent, Claude Opus 5.5)"
+              : s.description,
+      }));
+      const r = run(argv, w);
+      expect(r.code).toBe(0);
+      expect(r.fake.writes()).toHaveLength(3);
+    }
+  });
+
+  it("judges each context by its newest status only", () => {
+    const w = world();
+    // An agent PASS, then a later BLOCK on the same commit: the BLOCK is what stands.
+    w.statuses[OLD] = [
+      {
+        context: "agent/review",
+        state: "failure",
+        description: "Review: BLOCK",
+        target_url: null,
+        creator: bot,
+      },
+      ...pass(),
+    ];
+    const r = run([...POST, "--old", OLD], w);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('agent/review on aaaaaaa is failure "Review: BLOCK", not success');
+  });
+
+  it("reads every page of statuses", () => {
+    const w = world();
+    w.pageSize = 1;
+    // Newest first: the review verdict is on the second page.
+    const r = run(POST, w);
+    expect(r.code).toBe(0);
+  });
+
+  it("refuses when a commit after the old one has a FAIL or BLOCK, with or without --old", () => {
     const w = world();
     w.commits = [FIRST, OLD, MID, HEAD];
     w.statuses[MID] = [
-      { context: "agent/qa", state: "failure", description: "QA: FAIL", target_url: null },
+      {
+        context: "agent/qa",
+        state: "failure",
+        description: "QA: FAIL",
+        target_url: null,
+        creator: bot,
+      },
     ];
-    const r = run(POST, w);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('agent/qa on ccccccc is failure "QA: FAIL"');
-    expect(r.fake.writes()).toEqual([]);
+    for (const argv of [POST, [...POST, "--old", OLD.slice(0, 7)]]) {
+      const r = run(argv, w);
+      expect(r.code).toBe(1);
+      expect(r.out).toContain('refused: agent/qa on ccccccc is failure "QA: FAIL"');
+      expect(r.fake.writes()).toEqual([]);
+    }
   });
 
   it("refuses when the head already has both statuses as success", () => {
@@ -397,6 +586,16 @@ describe("carry-forward", () => {
     }
   });
 
+  it("reads every page of CI runs", () => {
+    const w = world();
+    w.pageSize = 1;
+    (w.runs[1] as Run).conclusion = "failure";
+    const r = run(POST, w);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("failed: E2E (Playwright + axe) (failure)");
+    expect(r.fake.writes()).toEqual([]);
+  });
+
   it("refuses when there are no CI runs on the new head", () => {
     const w = world();
     w.runs = [];
@@ -437,6 +636,65 @@ describe("carry-forward", () => {
   });
 
   describe("--print-owner-commands", () => {
+    const ownerScript = (ownerOk = OK) => {
+      const r = run(["7", "--print-owner-commands", "--owner-ok", ownerOk]);
+      expect(r.code).toBe(0);
+      expect(r.fake.writes()).toEqual([]);
+      return { r, script: r.out.slice(r.out.indexOf("\n(\n") + 1) };
+    };
+
+    /**
+     * Runs the printed commands in real bash against a fake gh. `routes` is a bash `case "$*"`
+     * body; the fake records each call's arguments and the comment body it was sent.
+     */
+    function runOwner(script: string, routes: string) {
+      const dir = mkdtempSync(join(tmpdir(), "carry-forward-test-"));
+      try {
+        const log = join(dir, "log");
+        writeFileSync(
+          join(dir, "gh"),
+          [
+            "#!/usr/bin/env bash",
+            `log=${log}`,
+            'printf "%s\\0" "$@" >> "$log"; printf "\\n" >> "$log"',
+            'for a in "$@"; do case "$a" in body=@*) cat "${a#body=@}" > "$log.body";; esac; done',
+            `case "$*" in ${routes} esac`,
+          ].join("\n"),
+        );
+        chmodSync(join(dir, "gh"), 0o755);
+        let ok = true;
+        let stderr = "";
+        try {
+          execFileSync("bash", ["-c", script], {
+            env: { PATH: `${dir}:${process.env.PATH}`, HOME: "/nonexistent" },
+            stdio: "pipe",
+          });
+        } catch (e) {
+          ok = false;
+          stderr = String((e as { stderr?: Buffer }).stderr ?? "");
+        }
+        const calls = readFileSync(log, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => line.split("\0").filter(Boolean));
+        let body = "";
+        try {
+          body = readFileSync(`${log}.body`, "utf8");
+        } catch {
+          // no comment was posted
+        }
+        const posts = calls.filter((c) => c.includes("POST"));
+        return { ok, stderr, calls, posts, body };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    // A PR still open at HEAD, no agent objections on the head, and a working comment POST.
+    const PR_OPEN = `*pulls/7*) echo "open ${HEAD}";;`;
+    const NO_OBJECTIONS = `*commits/${HEAD}/status*) echo "";;`;
+    const COMMENT_OK = `*issues/7/comments*) echo ${COMMENT_URL};;`;
+
     it("needs --owner-ok and runs every refusal check, writing nothing", () => {
       expect(run(["7", "--print-owner-commands"]).code).toBe(2);
       const w = world();
@@ -449,80 +707,77 @@ describe("carry-forward", () => {
 
     it("prints commands that post the same comment and statuses with Tuan's own gh", () => {
       const tricky = `Tuan said "carry it over" on 2026-10-26; it's fine $HOME \`x\` (#7)`;
-      const r = run(["7", "--print-owner-commands", "--owner-ok", tricky]);
-      expect(r.code).toBe(0);
-      expect(r.fake.writes()).toEqual([]);
+      const { r, script } = ownerScript(tricky);
       expect(r.out).not.toContain("as-bot");
-      const script = r.out.slice(r.out.indexOf("\n(\n") + 1);
-
-      // Run the printed commands in real bash against a fake gh that records what it's sent.
-      const dir = mkdtempSync(join(tmpdir(), "carry-forward-test-"));
-      try {
-        const log = join(dir, "log");
-        writeFileSync(
-          join(dir, "gh"),
-          [
-            "#!/usr/bin/env bash",
-            `log=${log}`,
-            'printf "%s\\0" "$@" >> "$log"; printf "\\n" >> "$log"',
-            'for a in "$@"; do case "$a" in body=@*) cat "${a#body=@}" > "$log.body";; esac; done',
-            `case "$*" in *pulls/7*) echo ${HEAD};; *issues/7/comments*) echo ${COMMENT_URL};; esac`,
-          ].join("\n"),
-        );
-        chmodSync(join(dir, "gh"), 0o755);
-        execFileSync("bash", ["-c", script], {
-          env: { PATH: `${dir}:${process.env.PATH}`, HOME: "/nonexistent" },
-          stdio: "pipe",
-        });
-        const calls = readFileSync(log, "utf8")
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => line.split("\0").filter(Boolean));
-        const statusCalls = calls.filter((c) => c.includes(`${API}/statuses/${HEAD}`));
-        expect(statusCalls.map((c) => c.filter((a) => a.includes("=")))).toEqual([
-          [
-            "state=success",
-            "context=agent/qa",
-            "description=QA: PASS (carried forward from aaaaaaa)",
-            `target_url=${COMMENT_URL}`,
-          ],
-          [
-            "state=success",
-            "context=agent/review",
-            "description=Review: APPROVE (carried forward from aaaaaaa)",
-            `target_url=${COMMENT_URL}`,
-          ],
-        ]);
-        const body = readFileSync(`${log}.body`, "utf8");
-        expect(body).toContain(`> ${tricky}\n`);
-        expect(body).toContain("**No agent ran on the new head");
-        expect(body).toContain("Posted by: Tuan, from his own account");
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+      const o = runOwner(script, `${PR_OPEN} ${NO_OBJECTIONS} ${COMMENT_OK}`);
+      expect(o.ok).toBe(true);
+      const statusCalls = o.calls.filter((c) => c.includes(`${API}/statuses/${HEAD}`));
+      expect(statusCalls.map((c) => c.filter((a) => a.includes("=")))).toEqual([
+        [
+          "state=success",
+          "context=agent/qa",
+          "description=QA: PASS (carried forward from aaaaaaa)",
+          `target_url=${COMMENT_URL}`,
+        ],
+        [
+          "state=success",
+          "context=agent/review",
+          "description=Review: APPROVE (carried forward from aaaaaaa)",
+          `target_url=${COMMENT_URL}`,
+        ],
+      ]);
+      expect(o.body).toContain(`> ${tricky}\n`);
+      expect(o.body).toContain("**No agent ran on the new head");
+      expect(o.body).toContain("Posted by: Tuan, from his own account");
     });
 
     it("the printed commands stop before posting if the head has moved", () => {
-      const r = run(["7", "--print-owner-commands", "--owner-ok", OK]);
-      const script = r.out.slice(r.out.indexOf("\n(\n") + 1);
-      const dir = mkdtempSync(join(tmpdir(), "carry-forward-test-"));
-      try {
-        const log = join(dir, "log");
-        writeFileSync(
-          join(dir, "gh"),
-          `#!/usr/bin/env bash\necho "$*" >> ${log}\necho ${"f".repeat(40)}\n`,
-        );
-        chmodSync(join(dir, "gh"), 0o755);
-        expect(() =>
-          execFileSync("bash", ["-c", script], {
-            env: { PATH: `${dir}:${process.env.PATH}` },
-            stdio: "pipe",
-          }),
-        ).toThrow(/head moved/);
-        expect(readFileSync(log, "utf8")).not.toContain("POST");
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
+      const o = runOwner(ownerScript().script, `*pulls/7*) echo "open ${"f".repeat(40)}";;`);
+      expect(o.ok).toBe(false);
+      expect(o.stderr).toMatch(/head moved/);
+      expect(o.posts).toEqual([]);
+    });
+
+    it("the printed commands stop before posting if the PR was closed", () => {
+      // The fake ignores --jq, so it answers "closed" only to a query that reads .state; a query
+      // that doesn't would print "open <sha>" whatever the PR's state.
+      const o = runOwner(
+        ownerScript().script,
+        `*pulls/7*.state*) echo "closed ${HEAD}";; *pulls/7*) echo "open ${HEAD}";; ${NO_OBJECTIONS} ${COMMENT_OK}`,
+      );
+      expect(o.ok).toBe(false);
+      expect(o.stderr).toContain(`PR #7 closed or head moved (now: closed ${HEAD})`);
+      expect(o.posts).toEqual([]);
+    });
+
+    it("the printed commands stop if an agent status that isn't success is on the head", () => {
+      const o = runOwner(
+        ownerScript().script,
+        `${PR_OPEN} *commits/${HEAD}/status*) echo "agent/review failure";;`,
+      );
+      expect(o.ok).toBe(false);
+      expect(o.stderr).toContain("the head now has agent/review failure; not posting");
+      expect(o.posts).toEqual([]);
+    });
+
+    it("the printed commands post no status if the comment fails or returns no link", () => {
+      for (const comment of [
+        `*issues/7/comments*) echo "HTTP 403" >&2; exit 1;;`,
+        `*issues/7/comments*) echo "";;`,
+      ]) {
+        const o = runOwner(ownerScript().script, `${PR_OPEN} ${NO_OBJECTIONS} ${comment}`);
+        expect(o.ok).toBe(false);
+        expect(o.posts.filter((c) => c.some((a) => a.includes("/statuses/")))).toEqual([]);
       }
+    });
+
+    it("the printed commands stop after the first status write that fails", () => {
+      const o = runOwner(
+        ownerScript().script,
+        `${PR_OPEN} ${NO_OBJECTIONS} ${COMMENT_OK} *context=agent/qa*) exit 1;;`,
+      );
+      expect(o.ok).toBe(false);
+      expect(o.calls.some((c) => c.includes("context=agent/review"))).toBe(false);
     });
   });
 });

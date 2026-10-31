@@ -66,9 +66,10 @@ menu, the banner covering content), so the checks stay but are sized to the risk
 4. **Re-checks cover only what changed.** After a fix, the reviewer reviews the fix commit (and
    QA re-tests only the affected behavior) instead of the whole PR. A v2 merge that leaves the PR's
    own files unchanged can carry the verdicts forward (see "Carrying verdicts forward"): the lead
-   checks it with `scripts/carry-forward.ts` and hands Tuan the commands it prints, which he posts.
-   Claude Code's permission guard refuses the lead posting a pass on a commit no agent checked
-   (2026-10-28), so carried and low-risk statuses always come from Tuan's account.
+   checks it with `scripts/carry-forward.ts`, and the carry is posted only with Tuan's decision.
+   Claude Code's permission guard refused the lead posting a pass on a commit no agent checked
+   (2026-10-28), so low-risk statuses come from Tuan's account, and so do carried ones unless the
+   script's `--post` is allowed to post them as the bot with Tuan's `--owner-ok`.
 5. **A cheaper model for QA.** QA is mostly mechanical; it runs on a smaller model. Reviews keep
    the stronger one.
 6. **Split by risk, bundle the rest.** Put a risky piece (like the menu) in its own PR so its
@@ -158,25 +159,35 @@ gh api repos/tuanhoang0117/tuanhoang0117.github.io/commits/<sha>/statuses \
 
 ### Carrying verdicts forward
 
-The one exception to "a new push resets both checks": when a PR's only new commit merges `v2`,
-the agents' verdicts can be copied to the new head instead of re-running the agents.
+The one exception to "a new push resets both checks": when every file the PR changes is identical
+at the new head and at a commit both agents passed, so that only merges of `v2` changed the branch
+since, the agents' verdicts can be copied to the new head instead of re-running the agents.
 
 - **When:** only after Tuan decides it for that PR, and only when the PR's own files are unchanged.
   Nobody carries forward by default.
 - **Checks:** [`scripts/carry-forward.ts`](../scripts/carry-forward.ts) refuses unless the PR is
-  open at the expected head; an older commit has `agent/qa` and `agent/review` both `success` from
-  the agents themselves (never a carried or overridden status, so no chains) with no FAIL or BLOCK
-  since; every file the PR changes is identical at both heads and untouched by `v2` in between;
-  and CI on the new head has passed (`--allow-pending-ci` lets running jobs through, never failed
-  ones).
+  open at the expected head; one older commit has the newest `agent/qa` and `agent/review` both
+  real agent verdicts, posted by `tuanhoang-bot` with a description starting `QA: PASS` or
+  `Review: APPROVE` (or `Review: APPROVE WITH SUGGESTIONS`); no commit since has a FAIL, BLOCK or
+  pending agent status; every file the PR changes, renamed files by their old name too, is
+  identical at both heads and untouched by `v2` in between; and CI on the new head has passed
+  (`--allow-pending-ci` lets running jobs through, never failed ones). Carried statuses, Tuan's
+  overrides and "No agent run" statuses never qualify, so carries never chain.
 - **Who posts:** the lead runs the script; agents are not re-run. A dry run is the default and
-  writes nothing: `node scripts/carry-forward.ts <N>`. With Tuan's decision,
-  `--post --owner-ok "<his words and the date>"` posts a disclosure comment, then both statuses
-  (`QA: PASS (carried forward from <old7>)`, `Review: APPROVE (carried forward from <old7>)`) as
-  the bot. Claude Code's guard may refuse that, since no agent checked the new head (point 4 of
-  "How much checking a PR gets"). Then the lead runs
-  `--print-owner-commands --owner-ok "<...>"` instead, which runs the same checks, writes nothing,
-  and prints the commands for Tuan to run in a normal terminal with his own `gh` login.
+  writes nothing: `node scripts/carry-forward.ts <N>`. Nothing is posted until Tuan decides, and
+  there are two ways to post:
+  - `--print-owner-commands --owner-ok "<his words and the date>"` runs the same checks, writes
+    nothing, and prints commands for Tuan to run in a normal terminal with his own `gh` login.
+    This is how Tuan posts from his account.
+  - `--post --owner-ok "<...>"` posts as the bot. It refuses without `--owner-ok` recording Tuan's
+    decision, and Claude Code's guard may refuse it anyway, since no agent checked the new head.
+
+  Either way, the post is a disclosure comment, then both statuses
+  (`QA: PASS (carried forward from <old7>)`, `Review: APPROVE (carried forward from <old7>)`)
+  linking to it. Right before writing, both re-read the PR and the head's agent statuses, and stop
+  if the PR closed, its head moved, or an agent posted anything but success on the head. The
+  printed commands stop at the first failed command; `--post` re-reads the statuses afterwards
+  and fails unless both are there with the comment's link.
 
 ### Known limitations
 
