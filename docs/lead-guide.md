@@ -5,7 +5,9 @@ shared files, and reports to Tuan. Any tool can be the lead. When one tool hits 
 another picks up from this guide and the handoff note, so nothing the lead knows may live only in
 one tool's memory.
 
-Read [agent-guide.md](agent-guide.md) and [agent-workflow.md](agent-workflow.md) first.
+Read [agent-guide.md](agent-guide.md) and [agent-workflow.md](agent-workflow.md) first. The
+workflow runs on a Windows workstation under WSL2; [workstation-setup.md](workstation-setup.md) sets
+one up and moves the lead from the Mac.
 
 ## The project
 
