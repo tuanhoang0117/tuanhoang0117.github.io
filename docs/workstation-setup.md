@@ -26,19 +26,7 @@ If a guard or permission refuses something, stop and tell Tuan; don't do it anot
 1. Open PowerShell **as administrator** and run `wsl --install -d Ubuntu`. Restart when asked.
 2. Open "Ubuntu" from the Start menu and create your Linux user and password. That password is what
    `sudo` asks for later.
-3. Optional, recommended for a workstation: let WSL use most of the machine. Create
-   `C:\Users\<you>\.wslconfig` with:
-
-   ```ini
-   [wsl2]
-   # About three quarters of the PC's RAM, and most of its cores:
-   memory=24GB
-   processors=12
-   ```
-
-   then run `wsl --shutdown` in PowerShell and reopen Ubuntu.
-
-4. Install Claude Code **inside Ubuntu** (the Linux version), following
+3. Install Claude Code **inside Ubuntu** (the Linux version), following
    <https://docs.claude.com/en/docs/claude-code/setup>. If you use VS Code, install the "WSL"
    extension and open the repo from Ubuntu with `code .`, so the editor and Claude Code both run in
    Linux.
@@ -157,7 +145,7 @@ in the repo once first so the folder exists, then copy the memory files into it.
 After copying: `chmod -R go-rwx ~/tuanhoang0117.github.io/private`.
 
 **Copy `private/` last, after the Mac's final lead session has updated `private/handoff.md`** (see
-section 8), so the workstation starts from the newest note.
+section 9), so the workstation starts from the newest note.
 
 ## 7. Verify [Agent]
 
@@ -179,7 +167,89 @@ each check and report the results to Tuan:
 
 If any check fails, stop and tell Tuan which one and the exact output (never a token).
 
-## 8. Moving the lead from the Mac [Tuan + both leads]
+## 8. Size the workload to this machine [Agent; one step Tuan]
+
+The agents think in the cloud; this machine only runs builds and test suites. What overloaded the
+Mac was several suites at once: `playwright.config.ts` sets no worker count, so every run starts one
+Chrome worker per two logical cores, and three QA/reviewer runs on a 10-core, 16 GB MacBook meant
+about 15 browsers on 10 cores. A GPU doesn't help (headless Chrome renders on the CPU); cores and RAM
+do. Work out the limits from this machine's real numbers, not from guesses.
+
+Keep every number below in a scratch file from `mktemp`, and report them to Tuan at the end.
+
+**8.1 Read the host's specs.** From WSL, through Windows interop:
+
+```bash
+powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Processor | Measure-Object NumberOfCores,NumberOfLogicalProcessors -Sum | ForEach-Object Sum) -join ' '" | tr -d '\r'
+powershell.exe -NoProfile -Command "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)" | tr -d '\r'
+powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Processor).Name" | tr -d '\r'
+df -h ~ | tail -1
+```
+
+That gives physical cores, logical processors (`HOST_LOGICAL`), RAM in GB (`HOST_GB`), the CPU
+name, and free disk. Flag to Tuan if free disk is under 30 GB (each agent worktree holds its own
+`node_modules`).
+
+**8.2 Propose `.wslconfig` [Tuan applies].** By default WSL gets half the RAM. Leave Windows 2
+logical processors and 8 GB (or a quarter of RAM, whichever is larger):
+
+```ini
+[wsl2]
+processors=<HOST_LOGICAL - 2>
+memory=<HOST_GB - max(8, HOST_GB / 4)>GB
+```
+
+Show Tuan the file with the numbers filled in. He saves it as `C:\Users\<him>\.wslconfig`, runs
+`wsl --shutdown` in PowerShell, and reopens Ubuntu. Then check inside WSL: `nproc` (call it `C`)
+and `free -g` total (call it `M`) should match the file.
+
+**8.3 Measure one suite alone.** With nothing else running (`uptime` load under 1):
+
+```bash
+s=$(mktemp); (while sleep 2; do free -m | awk '/^Mem:/{print $3}'; done) > "$s" & p=$!
+/usr/bin/time -f '%e s' npm run test:e2e -- --workers=4 2>&1 | tail -3
+kill $p; sort -n "$s" | tail -1   # peak MB used during the run
+```
+
+Record the duration and the peak memory minus the memory used before the run: that is one suite's
+footprint at 4 workers (`RUN_MB`). Per-worker cost is roughly `RUN_MB / 5` (4 workers plus the build
+and preview server); call it `WORKER_MB`.
+
+**8.4 Work out the limits.** Keep 2 cores and 4 GB for Windows' share of WSL, the editor, Claude Code
+and dev servers. Then:
+
+- **Workers per test run (`W`):** `max(2, min(6, floor((C - 2) / 3)))`. Three runs at once is the
+  target, because the agent cap is three.
+- **Test runs at once (`R`):** `min(3, floor((C - 2) / W), floor((M*1024 - 4096) / (WORKER_MB * (W + 1))))`.
+- **Time limit per full run:** 3 × the 8.3 duration, rounded up to whole minutes, at least 10.
+
+If `R` is below 3, the lead can still run three agents, but no more than `R` of them may be running
+test suites at the same moment; the others wait or do non-test work.
+
+**8.5 Prove it.** Run `R` full suites at the same time, each in its own checkout with its own
+`E2E_PORT`, each with `--workers=W`, each wrapped in `timeout <limit>`. All must pass and each
+should take no more than 1.5 × the 8.3 duration. If not, lower `W` by one (or `R`) and repeat.
+Check `free -m` and `uptime` during the run: load should stay under `C` and no swap should be used.
+
+**8.6 Record it** in `private/handoff.md`, in a `## Machine` section near the top, so every lead
+session reads it:
+
+```markdown
+## Machine (sized YYYY-MM-DD)
+
+- Workstation: <CPU name>, <cores>C/<logical>T, <HOST_GB> GB; WSL gets C=<C>, M=<M> GB.
+- Per test run: `--workers=<W>`, time limit <N> min (`timeout <N>m ...`).
+- Test runs at once: <R>. Agent cap: 3 (Tuan's rule).
+- Baseline: one full e2e at 4 workers = <duration>, peak <RUN_MB> MB.
+```
+
+From then on the lead puts `--workers=<W>` and the time limit into every engineer, QA and reviewer
+prompt, and checks `uptime` before starting another suite.
+
+**Redo this section** when the hardware or `.wslconfig` changes, or when a full suite takes twice
+the recorded baseline.
+
+## 9. Moving the lead from the Mac [Tuan + both leads]
 
 Only one lead runs at a time ([lead-guide.md](lead-guide.md)). To switch:
 
@@ -196,9 +266,10 @@ Unpushed work on the Mac does not travel: push it first, or note it in the hando
 
 - **Ports and folders** are the same as on the Mac (agent guide → Commands). Each agent still gets
   its own scratch folder.
-- **Limit test runs.** Give agents' Playwright runs a time limit, and check `uptime` before starting
-  more. A stuck run once held a browser for about 8 hours (Sprint 2). The agent cap stays at three
-  until Tuan raises it.
+- **Use the machine's limits** from `private/handoff.md` → Machine (section 8): pass `--workers=<W>`
+  and wrap every Playwright run in `timeout`, and keep no more than `R` suites running at once. A
+  stuck run once held a browser for about 8 hours (Sprint 2). The agent cap stays at three until
+  Tuan raises it.
 - Tuan's owner commands (overrides, merges) run in a normal Ubuntu terminal with his own `gh` login,
   never as `!` commands inside Claude Code.
 
