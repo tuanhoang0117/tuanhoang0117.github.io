@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
     // Retired code kept for restoring later; it must never run (archive/hackathons-page/README.md).
     exclude: [...configDefaults.exclude, "archive/**"],
     css: false,
