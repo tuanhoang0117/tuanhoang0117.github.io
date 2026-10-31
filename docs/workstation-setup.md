@@ -61,6 +61,15 @@ nvm alias default 24
 
 **Check:** `node -v` prints `v24.x`.
 
+**Make Node visible to Claude Code.** Claude Code runs commands in a non-interactive shell, and
+Ubuntu's `~/.bashrc` returns early for those (the `case $- in *i*) ...` lines near the top). nvm's
+installer appends its lines at the bottom, below that guard, so a Claude session finds no Linux
+`node` and falls through to Windows' `npm` on the `/mnt/c` PATH, which fails with
+`UNC paths are not supported` (seen 2026-10-31). Move nvm's three lines (`export NVM_DIR=...` and
+the two `[ -s ... ]` lines) to the **top** of `~/.bashrc`, above the guard.
+
+**Check [Agent]:** in a new Claude Code session, `command -v node` prints a path under `~/.nvm/`.
+
 ## 4. Clone the repo [Agent]
 
 Clone into the Linux home folder, **not** under `/mnt/c`: the Windows filesystem is far slower for
@@ -96,7 +105,8 @@ hides GitHub logins from Claude sessions on purpose.
    GitHub.com, HTTPS, and log in with the browser.
 3. **A bot token for this machine.** Make a new one rather than copying the Mac's, so either machine
    can be revoked alone. Sign in to GitHub **as tuanhoang-bot**, then Settings → Developer settings →
-   Personal access tokens → Tokens (classic) → Generate new token (classic): name it
+   Personal access tokens → Tokens (classic) → Generate new token (classic) (direct link:
+   <https://github.com/settings/tokens/new>): name it
    "workstation", 90-day expiry, scope **`repo` only**. Store it without it touching your shell
    history or the screen:
 
@@ -106,7 +116,15 @@ hides GitHub logins from Claude sessions on purpose.
    chmod 600 ~/.config/tuanhoang-bot/token
    ```
 
-   Never paste the token into a Claude chat, a file in the repo, or a message.
+   **Classic, not fine-grained.** GitHub's default "Generate new token" makes a fine-grained token
+   (`github_pat_...`). It can't write to this repo whatever permissions you tick: a fine-grained
+   token only reaches repos owned by its own account or its organizations, and the repo is owned by
+   Tuan's account, with the bot as a collaborator. Reads still work because the repo is public, so
+   the mistake shows up only at the first write. A classic token starts with `ghp_`. To check
+   without showing it: `head -c 4 ~/.config/tuanhoang-bot/token; echo`.
+
+   Never paste the token into a Claude chat, a file in the repo, or a message. If you do, revoke it
+   at once and make a new one.
    `scripts/as-bot.sh` reads this file on Linux (and Keychain on the Mac).
    `.claude/settings.json` denies Claude's Read tool on this folder.
 
@@ -277,6 +295,11 @@ Unpushed work on the Mac does not travel: push it first, or note it in the hando
 
 - `as-bot: no ~/.config/tuanhoang-bot/token`: section 5, step 3.
 - `as-bot: ... must be mode 600`: `chmod 600 ~/.config/tuanhoang-bot/token`.
+- `Resource not accessible by personal access token` on `gh issue create`, `gh pr create` or a
+  push: the bot token is fine-grained. Make a classic `repo` token (section 5, step 3). The check:
+  `scripts/as-bot.sh gh api -i user | grep -i x-oauth-scopes` prints `repo`.
+- `UNC paths are not supported` from `npm` inside Claude Code: nvm isn't loaded in non-interactive
+  shells (section 3, "Make Node visible to Claude Code").
 - Plain `gh` works inside a Claude session: `/var/empty` is missing or writable (section 2), or the
   session didn't start in the repo, so `.claude/settings.json` didn't load.
 - The guard refuses `scripts/as-bot.sh git ...` for agents: section 5, step 4, then start a new
