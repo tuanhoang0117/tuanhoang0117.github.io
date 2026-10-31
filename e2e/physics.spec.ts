@@ -57,6 +57,60 @@ async function dropAndSettle(page: Page, clicks: number) {
   await expect(overlay(page)).toHaveAttribute("data-resting", "true", { timeout: REST_TIMEOUT });
 }
 
+/**
+ * Timestamps, inside the page, the first press and the last release the page receives. The test
+ * waits on Playwright's clock, but a busy browser can take the release late, so the page's own
+ * clock is the only true measure of how long the hold lasted.
+ */
+function recordHold(page: Page, down: "pointerdown" | "keydown", up: "pointerup" | "keyup") {
+  return page.addInitScript(
+    ({ down, up }) => {
+      const hold: { down?: number; up?: number } = {};
+      (window as unknown as { __hold: typeof hold }).__hold = hold;
+      const counts = (event: Event) =>
+        event instanceof KeyboardEvent
+          ? event.key === " " && !event.repeat
+          : (event as PointerEvent).button === 0;
+      // Capture on window, so these run in the same task as the page's own handlers.
+      window.addEventListener(
+        down,
+        (event) => {
+          if (counts(event) && hold.down === undefined) hold.down = performance.now();
+        },
+        true,
+      );
+      window.addEventListener(
+        up,
+        (event) => {
+          if (counts(event) && hold.down !== undefined) hold.up = performance.now();
+        },
+        true,
+      );
+    },
+    { down, up },
+  );
+}
+
+/** Checks the tokens dropped against how long the page saw the hold last. Returns the count. */
+async function expectHoldRate(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __hold: { up?: number } }).__hold.up))
+    .toBeDefined();
+  const { held, count } = await overlay(page).evaluate((el) => {
+    const { down, up } = (window as unknown as { __hold: { down: number; up: number } }).__hold;
+    return { held: up - down, count: Number((el as HTMLElement).dataset.tokens) };
+  });
+  // One token for the press; after HOLD_DELAY_MS, one per 1000 / HOLD_RATE_PER_SECOND ms.
+  const expectedStream = (HOLD_RATE_PER_SECOND * Math.max(0, held - HOLD_DELAY_MS)) / 1000;
+  const info = `${count} tokens for a ${Math.round(held)} ms hold`;
+  // Late timers only lower the count, so the floor is loose: half the expected rate.
+  expect(count - 1, info).toBeGreaterThanOrEqual(Math.floor(expectedStream / 2));
+  // The cap bounds the rate, not the count for an assumed duration: never more than the cap for
+  // the real hold, plus the press. Counting the delay as held time leaves room for timer jitter.
+  expect(count, info).toBeLessThanOrEqual(1 + (HOLD_RATE_PER_SECOND * held) / 1000);
+  return count;
+}
+
 test.describe("/lab/physics", () => {
   test("keeps viewport sizing when an ancestor is transformed or filtered", async ({ page }) => {
     await page.goto("/lab/physics");
@@ -138,30 +192,26 @@ test.describe("/lab/physics", () => {
   });
 
   test("holding the mouse drops a steady stream at a capped rate", async ({ page }) => {
+    await recordHold(page, "pointerdown", "pointerup");
     await page.goto("/lab/physics");
     const box = (await dropButton(page).boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(HOLD_DELAY_MS + 1000);
     await page.mouse.up();
-    const count = Number(await overlay(page).getAttribute("data-tokens"));
-    // One for the press, then about HOLD_RATE_PER_SECOND for each second held. Timers in a busy
-    // browser run late, never early, so the cap is a hard upper bound.
-    expect(count).toBeGreaterThanOrEqual(HOLD_RATE_PER_SECOND / 2);
-    expect(count).toBeLessThanOrEqual(1 + HOLD_RATE_PER_SECOND);
+    const count = await expectHoldRate(page);
     await page.waitForTimeout(500);
     await expect(overlay(page)).toHaveAttribute("data-tokens", String(count));
   });
 
   test("holding Space drops a steady stream at the same capped rate", async ({ page }) => {
+    await recordHold(page, "keydown", "keyup");
     await page.goto("/lab/physics");
     await dropButton(page).focus();
     await page.keyboard.down(" ");
     await page.waitForTimeout(HOLD_DELAY_MS + 1000);
     await page.keyboard.up(" ");
-    const count = Number(await overlay(page).getAttribute("data-tokens"));
-    expect(count).toBeGreaterThanOrEqual(HOLD_RATE_PER_SECOND / 2);
-    expect(count).toBeLessThanOrEqual(1 + HOLD_RATE_PER_SECOND);
+    await expectHoldRate(page);
   });
 
   test("the floor moves with the viewport when it resizes", async ({ page }) => {
