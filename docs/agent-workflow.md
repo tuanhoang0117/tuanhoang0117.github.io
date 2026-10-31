@@ -87,8 +87,9 @@ this repo only. This does three things:
 3. **Automation is labeled.** Anyone can see which work came from agents.
 
 [`scripts/as-bot.sh`](../scripts/as-bot.sh) runs a single `git` or `gh` command as the bot. It reads
-the token from macOS Keychain into that command's environment, so the token is never printed and
-never appears in a command line.
+the token from macOS Keychain (or, on the Linux workstation, from a mode-600 file; see
+[workstation-setup.md](workstation-setup.md)) into that command's environment, so the token is
+never printed and never appears in a command line.
 
 Plain `gh` on this machine is logged in as Tuan, and plain `git push` uses his Keychain
 credential, so an agent that forgot the script would act under his name, and its status could look
