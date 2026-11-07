@@ -1,32 +1,39 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { mascotCounterLabel, mascotLabel, mascotPrompt } from "../../content/mascot";
 import { useReducedMotion } from "../../pixel/useReducedMotion";
 import { pageThemes } from "../../styles/themes";
 import { Mascot, type MascotActivation } from "../mascot/Mascot";
+import type { CounterClient } from "../mascot/counter/client";
+import type { SharedCounterOptions } from "../mascot/counter/sharedCounter";
+import { useSharedCounter } from "../mascot/counter/useSharedCounter";
 
 const theme = pageThemes.home;
 const HINT_ID = "mascot-hint";
 
 interface HomeMascotProps {
-  /** Called on every press, after the local counter has counted it. */
+  /** Called on every press, after the counter has counted it. */
   onActivate?: (activation: MascotActivation) => void;
+  /** Where the total comes from. Defaults to the build's client (shared, or local without one). */
+  counterClient?: CounterClient;
+  counterOptions?: SharedCounterOptions;
 }
 
 /**
- * The home page's mustang, with a "Click me" prompt and a local press counter on one line above
- * it. The counter counts every click, tap, Enter, and Space on this page only (it starts at 0 on
- * each visit) and is a polite live region, so screen readers hear the new total without losing
- * focus.
+ * The home page's mustang, with a "Click me" prompt and the press counter on one line above it.
+ * The counter shows the total shared by every visitor (local to this page when the service is off
+ * or down), moves by one at once on every click, tap, Enter, and Space, and is a polite live
+ * region, so screen readers hear the new total without losing focus. Sending presses in batches
+ * doesn't change the text, so it adds no announcements.
  */
-export function HomeMascot({ onActivate }: HomeMascotProps) {
+export function HomeMascot({ onActivate, counterClient, counterOptions }: HomeMascotProps) {
   const reduced = useReducedMotion();
-  const [count, setCount] = useState(0);
+  const { count, mode, press } = useSharedCounter(counterClient, counterOptions);
   const activate = useCallback(
     (activation: MascotActivation) => {
-      setCount((n) => n + 1);
+      press();
       onActivate?.(activation);
     },
-    [onActivate],
+    [onActivate, press],
   );
 
   return (
@@ -49,7 +56,13 @@ export function HomeMascot({ onActivate }: HomeMascotProps) {
           {mascotPrompt}
         </p>
         <span aria-hidden="true">/</span>
-        <p data-mascot-counter="" aria-live="polite" aria-atomic="true" className="tabular-nums">
+        <p
+          data-mascot-counter=""
+          data-counter-mode={mode}
+          aria-live="polite"
+          aria-atomic="true"
+          className="tabular-nums"
+        >
           {mascotCounterLabel}: {count}
         </p>
       </div>

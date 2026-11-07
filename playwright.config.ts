@@ -26,5 +26,8 @@ export default defineConfig({
     port: PORT,
     reuseExistingServer: false,
     timeout: 120_000,
+    // Never the real shared counter: a set variable beats .env.production, and nothing listens on
+    // port 9, so a page e2e/counter.spec.ts doesn't stub falls back to counting locally.
+    env: { VITE_COUNTER_URL: "http://127.0.0.1:9" },
   },
 });
