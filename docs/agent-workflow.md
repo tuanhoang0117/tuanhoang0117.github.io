@@ -65,10 +65,11 @@ menu, the banner covering content), so the checks stay but are sized to the risk
    judgment: the diff, deliberate breaks, and real-browser checks.
 4. **Re-checks cover only what changed.** After a fix, the reviewer reviews the fix commit (and
    QA re-tests only the affected behavior) instead of the whole PR. A v2 merge that leaves the PR's
-   own files unchanged carries the verdicts forward: the lead checks that the PR's files didn't
-   change and hands Tuan the override commands, which he posts. Claude Code's permission guard
-   refuses the lead posting a pass on a commit no agent checked (2026-10-28), so carried and
-   low-risk statuses always come from Tuan's account.
+   own files unchanged can carry the verdicts forward (see "Carrying verdicts forward"): the lead
+   checks it with `scripts/carry-forward.ts`, and the carry is posted only with Tuan's decision.
+   Claude Code's permission guard refused the lead posting a pass on a commit no agent checked
+   (2026-10-28), so low-risk statuses come from Tuan's account, and so do carried ones unless the
+   script's `--post` is allowed to post them as the bot with Tuan's `--owner-ok`.
 5. **A cheaper model for QA.** QA is mostly mechanical; it runs on a smaller model. Reviews keep
    the stronger one.
 6. **Split by risk, bundle the rest.** Put a risky piece (like the menu) in its own PR so its
@@ -107,17 +108,18 @@ On `v2`:
 - Both CI jobs must pass, against the latest `v2`.
 - Both agent checks must pass: `agent/qa` (QA's PASS/FAIL) and `agent/review` (the reviewer's
   verdict; BLOCK fails). The agents publish them as commit statuses on the exact commit they
-  tested, so a new push resets them and the agents run again. This was added after the first dry
-  run, when a PR was merged minutes before its reviewer said BLOCK.
+  tested, so a new push resets them and the agents run again (unless the push only merged `v2`
+  and Tuan carries the verdicts forward; see "Carrying verdicts forward"). This was added after
+  the first dry run, when a PR was merged minutes before its reviewer said BLOCK.
 - One approval from the code owner (Tuan, via [`CODEOWNERS`](../.github/CODEOWNERS)). The bot's
   approval doesn't count.
 - New commits after an approval cancel it.
 
 Branches must be **up to date** with `v2` before merging. When one PR merges, every other open PR
 must update. CI re-runs on the updated branch, which catches two PRs that pass separately and break
-together. If the PR's own files are unchanged, the agents' verdicts carry forward with a
-disclosure comment; otherwise the changed part is checked again (see "How much checking a PR
-gets").
+together. If the PR's own files are unchanged and Tuan decides so, the agents' verdicts carry
+forward with a disclosure comment (see "Carrying verdicts forward"); otherwise the changed part is
+checked again (see "How much checking a PR gets").
 
 ### Overriding a gate
 
@@ -154,6 +156,38 @@ anything an override replaced:
 gh api repos/tuanhoang0117/tuanhoang0117.github.io/commits/<sha>/statuses \
   -q '.[] | [.created_at, .context, .state, .creator.login, .description] | @tsv'
 ```
+
+### Carrying verdicts forward
+
+The one exception to "a new push resets both checks": when every file the PR changes is identical
+at the new head and at a commit both agents passed, so that only merges of `v2` changed the branch
+since, the agents' verdicts can be copied to the new head instead of re-running the agents.
+
+- **When:** only after Tuan decides it for that PR, and only when the PR's own files are unchanged.
+  Nobody carries forward by default.
+- **Checks:** [`scripts/carry-forward.ts`](../scripts/carry-forward.ts) refuses unless the PR is
+  open at the expected head; one older commit has the newest `agent/qa` and `agent/review` both
+  real agent verdicts, posted by `tuanhoang-bot` with a description starting `QA: PASS` or
+  `Review: APPROVE` (or `Review: APPROVE WITH SUGGESTIONS`); no commit since has a FAIL, BLOCK or
+  pending agent status; every file the PR changes, renamed files by their old name too, is
+  identical at both heads and untouched by `v2` in between; and CI on the new head has passed
+  (`--allow-pending-ci` lets running jobs through, never failed ones). Carried statuses, Tuan's
+  overrides and "No agent run" statuses never qualify, so carries never chain.
+- **Who posts:** the lead runs the script; agents are not re-run. A dry run is the default and
+  writes nothing: `node scripts/carry-forward.ts <N>`. Nothing is posted until Tuan decides, and
+  there are two ways to post:
+  - `--print-owner-commands --owner-ok "<his words and the date>"` runs the same checks, writes
+    nothing, and prints commands for Tuan to run in a normal terminal with his own `gh` login.
+    This is how Tuan posts from his account.
+  - `--post --owner-ok "<...>"` posts as the bot. It refuses without `--owner-ok` recording Tuan's
+    decision, and Claude Code's guard may refuse it anyway, since no agent checked the new head.
+
+  Either way, the post is a disclosure comment, then both statuses
+  (`QA: PASS (carried forward from <old7>)`, `Review: APPROVE (carried forward from <old7>)`)
+  linking to it. Right before writing, both re-read the PR and the head's agent statuses, and stop
+  if the PR closed, its head moved, or an agent posted anything but success on the head. The
+  printed commands stop at the first failed command; `--post` re-reads the statuses afterwards
+  and fails unless both are there with the comment's link.
 
 ### Known limitations
 
