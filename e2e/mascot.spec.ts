@@ -64,9 +64,14 @@ test.describe("/lab/mascot", () => {
 
   test("animates at a steady rate", async ({ page }) => {
     await expect(canvas(page)).toHaveAttribute("data-state", "running");
-    const start = await framesDrawn(page);
-    await page.waitForTimeout(1000);
-    const perSecond = (await framesDrawn(page)) - start;
+    // Timed inside the page, start and end in one evaluate, as on the home page: timing from the
+    // test side stretches the window by each round trip's wait for a busy main thread.
+    const perSecond = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+      const frames0 = Number(c.dataset.frames ?? 0);
+      const t0 = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return ((Number(c.dataset.frames ?? 0) - frames0) * 1000) / (performance.now() - t0);
+    });
     // 30 fps on low-power devices, 60 elsewhere. 20 leaves room for a busy CI runner while still
     // catching a loop that stalls or stops.
     expect(perSecond).toBeGreaterThanOrEqual(20);
