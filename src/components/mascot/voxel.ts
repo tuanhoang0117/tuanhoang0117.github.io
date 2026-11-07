@@ -87,7 +87,7 @@ export function spinAngle(seconds: number): number {
   return easeTurn(REST_PHASE + seconds * SPIN_BASE_SPEED);
 }
 
-/** Same surface brightness as the flat placeholder: dark features, light mane, mid coat. */
+/** Surface brightness: dark features, light mane, mid coat. */
 const ALBEDO = { coat: 0.8, mane: 1, light: 1, feature: 0.1 };
 
 /** A [1 2 1] blur along both axes; outside the grid counts as 0. */
@@ -172,7 +172,7 @@ export function createRaster(size: number): Raster {
 }
 
 // Unit vector toward the light, in view space (x right, y down, z toward the viewer): up, left,
-// and in front. The same light as the flat placeholder.
+// and in front.
 const LIGHT = (() => {
   const v = [-0.48, -0.56, 0.68];
   const n = Math.hypot(v[0]!, v[1]!, v[2]!);
@@ -190,21 +190,6 @@ const RELIEF = 1.1;
 
 /** How far side faces lean toward the front or back face they meet (0 = flat walls). */
 const SIDE_LEAN = 0.6;
-
-/** Bilinear lookup of a per-pixel field at sprite coordinates (pixel centers at +0.5). */
-function lerpField(field: Float32Array, size: number, fx: number, fy: number): number {
-  const x = Math.min(size - 1, Math.max(0, fx - 0.5));
-  const y = Math.min(size - 1, Math.max(0, fy - 0.5));
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const x1 = Math.min(size - 1, x0 + 1);
-  const y1 = Math.min(size - 1, y0 + 1);
-  const tx = x - x0;
-  const ty = y - y0;
-  const top = field[y0 * size + x0]! * (1 - tx) + field[y0 * size + x1]! * tx;
-  const bottom = field[y1 * size + x0]! * (1 - tx) + field[y1 * size + x1]! * tx;
-  return top * (1 - ty) + bottom * ty;
-}
 
 /**
  * Draws the model turned `angle` radians about its vertical axis into `target`, overwriting it.
@@ -235,14 +220,22 @@ export function renderVoxels(model: VoxelModel, angle: number, target: Raster, s
   const [hx, hy, hz] = HALFWAY;
 
   // Per raster column, for the current sprite row: the hit column (-1 = none), whether the ray
-  // entered through a side face, which way that face points (±1), the hit's model x, and its depth
-  // toward the viewer.
+  // entered through a side face, which way that face points (±1), and the hit's model x.
   const hitCol = new Int16Array(S);
   const hitSide = new Uint8Array(S);
   const hitSign = new Int8Array(S);
   const hitX = new Float32Array(S);
   const hitZ = new Float32Array(S);
   const hitDepth = new Float32Array(S);
+  // What the shading needs that is the same for every raster row of a sprite row, worked out
+  // once per sprite row: the hit's surface brightness, depth cue, model-space normal z, and the
+  // x half of the bilinear slope lookup (the columns either side of the hit and the weight).
+  const hitSurface = new Float64Array(S);
+  const hitCue = new Float64Array(S);
+  const hitMZ = new Float64Array(S);
+  const slopeX0 = new Int32Array(S);
+  const slopeX1 = new Int32Array(S);
+  const slopeTX = new Float64Array(S);
 
   let row = -1;
   for (let py = 0; py < S; py++) {
@@ -295,33 +288,59 @@ export function renderVoxels(model: VoxelModel, angle: number, target: Raster, s
         }
         hitCol[px] = col;
         if (col < 0) continue;
+        const sign = side ? (sin > 0 ? 1 : -1) : cos > 0 ? 1 : -1;
         hitSide[px] = side ? 1 : 0;
-        hitSign[px] = side ? (sin > 0 ? 1 : -1) : cos > 0 ? 1 : -1;
+        hitSign[px] = sign;
         hitX[px] = ox + best * sin;
         hitZ[px] = oz + best * cos;
         hitDepth[px] = best;
+
+        const i = base + col;
+        hitSurface[px] = side ? sideAlbedo[i]! : albedo[i]!;
+        // Nearer surfaces are a little brighter, so the thick middle of the head stands forward.
+        const near = Math.min(1, Math.max(0, (hitDepth[px]! + reach) / (2 * reach)));
+        hitCue[px] = 0.7 + 0.3 * near;
+        hitMZ[px] = side ? Math.sign(hitZ[px]!) * SIDE_LEAN : sign;
+        const sx0 = Math.min(n - 1, Math.max(0, hitX[px]! + center - 0.5));
+        const x0 = Math.floor(sx0);
+        slopeX0[px] = x0;
+        slopeX1[px] = Math.min(n - 1, x0 + 1);
+        slopeTX[px] = sx0 - x0;
       }
     }
 
+    // The y half of the bilinear slope lookup, for this raster row.
+    const sy = Math.min(n - 1, Math.max(0, fy - 0.5));
+    const y0 = Math.floor(sy);
+    const top = y0 * n;
+    const bottom = Math.min(n - 1, y0 + 1) * n;
+    const ty = sy - y0;
+
     const rowStart = py * S;
     for (let px = 0; px < S; px++) {
-      const col = hitCol[px]!;
-      if (col < 0) continue;
-      const i = row * n + col;
+      if (hitCol[px]! < 0) continue;
       const sign = hitSign[px]!;
       const side = hitSide[px] === 1;
       // Model-space normal. Front and back faces follow the smoothed surface z = ±half(x, y).
       // Side faces (the steps between columns) lean partway toward that surface, so they read
       // as steps on a rounded head rather than as dark stripes.
-      const gx = lerpField(slopeX, n, hitX[px]! + center, fy);
-      const gy = lerpField(slopeY, n, hitX[px]! + center, fy);
+      const x0 = slopeX0[px]!;
+      const x1 = slopeX1[px]!;
+      const tx = slopeTX[px]!;
+      const gx =
+        (slopeX[top + x0]! * (1 - tx) + slopeX[top + x1]! * tx) * (1 - ty) +
+        (slopeX[bottom + x0]! * (1 - tx) + slopeX[bottom + x1]! * tx) * ty;
+      const gy =
+        (slopeY[top + x0]! * (1 - tx) + slopeY[top + x1]! * tx) * (1 - ty) +
+        (slopeY[bottom + x0]! * (1 - tx) + slopeY[bottom + x1]! * tx) * ty;
       const mx = side ? sign - RELIEF * gx : -RELIEF * gx;
-      const mz = side ? Math.sign(hitZ[px]!) * SIDE_LEAN : sign;
+      const mz = hitMZ[px]!;
       // Turned with the model, into view space.
       let vx = mx * cos - mz * sin;
       let vy = -RELIEF * gy;
       let vz = mx * sin + mz * cos;
-      const len = Math.hypot(vx, vy, vz);
+      // Math.sqrt rather than Math.hypot: the same result here, and far cheaper per pixel.
+      const len = Math.sqrt(vx * vx + vy * vy + vz * vz);
       vx /= len;
       vy /= len;
       vz /= len;
@@ -335,12 +354,11 @@ export function renderVoxels(model: VoxelModel, angle: number, target: Raster, s
       spec *= spec; // ^16
       spec *= spec; // ^32
       spec *= s8; // ^40
-      // Nearer surfaces are a little brighter, so the thick middle of the head stands forward.
-      const near = Math.min(1, Math.max(0, (hitDepth[px]! + reach) / (2 * reach)));
-      const cue = 0.7 + 0.3 * near;
-      const surface = side ? sideAlbedo[i]! : albedo[i]!;
       // Dark features stay matte, so the highlight never washes out the eye.
-      const shade = Math.min(1, 0.04 + surface * ((0.12 + 0.82 * diffuse) * cue + spec * 0.35));
+      const shade = Math.min(
+        1,
+        0.04 + hitSurface[px]! * ((0.12 + 0.82 * diffuse) * hitCue[px]! + spec * 0.35),
+      );
       const gray = Math.round(shade * 255);
       const p = (rowStart + px) * 4;
       data[p] = gray;
