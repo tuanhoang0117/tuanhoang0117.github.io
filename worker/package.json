@@ -1,0 +1,19 @@
+{
+  "name": "musty-counter",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --var ALLOW_DEV_ORIGINS:true",
+    "types": "mkdir -p node_modules/.wrangler-types && wrangler types --strict-vars=false node_modules/.wrangler-types/worker-configuration.d.ts",
+    "typecheck": "npm run types && tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.150.0"
+  }
+}

@@ -6,7 +6,7 @@ export const site = {
   location: "San Luis Obispo, CA",
   timeZone: "America/Los_Angeles",
   email: "tuanhoang0117@gmail.com",
-  tagline: "Computer science student at Cal Poly SLO.",
+  tagline: "Computer science student.",
   description:
     "Tuan Hoang — computer science student at Cal Poly SLO. Portfolio, resume, and projects in software engineering, AI, and full-stack development.",
 };
