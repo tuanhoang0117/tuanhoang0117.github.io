@@ -9,8 +9,23 @@ import { tokenArt, tokenVisual, type TokenVisual } from "./tokenVisual";
 import { createTokenWorld, DEFAULT_MAX_BODIES } from "./world";
 
 export interface PhysicsOverlayHandle {
-  /** Drops one token at a viewport (client) coordinate. Does nothing under reduced motion. */
+  /**
+   * Adds one token for a press at a viewport (client) coordinate. On an element marked
+   * `data-token-launcher` (the mascot), the token is flung out of that element's center; anywhere
+   * else it drops at the point. Does nothing under reduced motion.
+   */
   spawnAt(x: number, y: number): void;
+}
+
+/** The center of the token launcher under a point, if there is one. */
+function launcherCenterAt(x: number, y: number) {
+  for (const el of document.querySelectorAll("[data-token-launcher]")) {
+    const box = el.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) continue;
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) continue;
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  }
+  return undefined;
 }
 
 interface PhysicsOverlayProps {
@@ -253,7 +268,9 @@ export function PhysicsOverlay({
     void document.fonts?.ready.then(whenSettled);
 
     spawnRef.current = (x, y) => {
-      variantOf.set(world.spawnAt(x, y), nextVariant++ % Math.max(1, art.variants.length));
+      const launcher = launcherCenterAt(x, y);
+      const body = launcher ? world.flingFrom(launcher.x, launcher.y) : world.spawnAt(x, y);
+      variantOf.set(body, nextVariant++ % Math.max(1, art.variants.length));
       // The press may have changed the page, like the counter gaining a digit. The next frame reads
       // it before the new token moves.
       collidersStale = true;

@@ -15,6 +15,13 @@ const WAKE_REACH = 1.5;
 const SUPPORT_REACH = 2.5;
 /** Boxes closer than this, in CSS pixels, count as not having moved. */
 const MOVE_EPSILON = 0.25;
+/**
+ * A flung token's launch speed, in CSS pixels per 1/60 s step. Straight up at the top speed it
+ * rises about 115px before falling, well short of the mascot's prompt and counter at xl (about
+ * 200px above its center), so a fling never lands a token on them.
+ */
+export const FLING_MIN_SPEED = 4;
+export const FLING_MAX_SPEED = 8;
 
 export interface WorldOptions {
   width: number;
@@ -40,7 +47,13 @@ export interface TokenWorld {
   readonly walls: Walls;
   /** Static bodies for page elements, in the order given to `setColliders`. */
   readonly colliders: readonly Matter.Body[];
+  /** Drops a token at a point, with a small random toss. */
   spawnAt(x: number, y: number): Matter.Body;
+  /**
+   * Launches a token from a point in a random direction, at a random speed between
+   * `FLING_MIN_SPEED` and `FLING_MAX_SPEED`. Same body, cap, and colliders as `spawnAt`.
+   */
+  flingFrom(x: number, y: number): Matter.Body;
   resize(width: number, height: number): void;
   /**
    * Makes the page's elements match these boxes. Sleeping tokens near anything that moved wake up,
@@ -158,6 +171,20 @@ export function createTokenWorld(options: WorldOptions): TokenWorld {
     return body;
   };
 
+  const addToken = (x: number, y: number, velocity: Matter.Vector) => {
+    const body = Bodies.circle(clampX(x), Math.min(y, height - radius), radius, {
+      restitution: 0.6,
+      friction: 0.07,
+      frictionAir: 0.01,
+    });
+    Body.setVelocity(body, velocity);
+    Body.setAngularVelocity(body, between(-0.15, 0.15));
+    Composite.add(engine.world, body);
+    tokens.push(body);
+    while (tokens.length > maxBodies) removeToken(tokens[0]!);
+    return body;
+  };
+
   return {
     engine,
     tokens,
@@ -169,17 +196,13 @@ export function createTokenWorld(options: WorldOptions): TokenWorld {
     },
 
     spawnAt(x, y) {
-      const body = Bodies.circle(clampX(x), Math.min(y, height - radius), radius, {
-        restitution: 0.6,
-        friction: 0.07,
-        frictionAir: 0.01,
-      });
-      Body.setVelocity(body, { x: between(-3, 3), y: between(-5, -1) });
-      Body.setAngularVelocity(body, between(-0.15, 0.15));
-      Composite.add(engine.world, body);
-      tokens.push(body);
-      while (tokens.length > maxBodies) removeToken(tokens[0]!);
-      return body;
+      return addToken(x, y, { x: between(-3, 3), y: between(-5, -1) });
+    },
+
+    flingFrom(x, y) {
+      const direction = between(0, 2 * Math.PI);
+      const speed = between(FLING_MIN_SPEED, FLING_MAX_SPEED);
+      return addToken(x, y, { x: Math.cos(direction) * speed, y: Math.sin(direction) * speed });
     },
 
     resize(nextWidth, nextHeight) {

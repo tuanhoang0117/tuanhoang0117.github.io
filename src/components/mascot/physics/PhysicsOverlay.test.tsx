@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type { SpriteDef } from "../../../pixel/types";
 import { PhysicsOverlay, type PhysicsOverlayHandle } from "./PhysicsOverlay";
 import type { TokenVisual } from "./tokenVisual";
-import { REST_BEFORE_FADE_MS } from "./world";
+import { FLING_MAX_SPEED, FLING_MIN_SPEED, REST_BEFORE_FADE_MS } from "./world";
 
 interface FakeContext {
   canvas: HTMLCanvasElement;
@@ -638,6 +638,72 @@ describe("PhysicsOverlay and the page", () => {
     });
     expect(tokenBodies()).toHaveLength(3);
     expect(overlayCanvas(document.body)).toHaveAttribute("data-tokens", "3");
+  });
+
+  describe("a token launcher (the mascot)", () => {
+    // The launcher's box: 300px square, centered at (250, 300).
+    const BOX = { left: 100, top: 150, width: 300, height: 300 };
+    const renderWithLauncher = (maxBodies?: number) => {
+      const ref = createRef<PhysicsOverlayHandle>();
+      const result = render(
+        <>
+          <button type="button" data-token-launcher="" data-testid="launcher" />
+          <PhysicsOverlay ref={ref} visual={CIRCLES} maxBodies={maxBodies} />
+        </>,
+      );
+      const launcher = result.getByTestId("launcher");
+      vi.spyOn(launcher, "getBoundingClientRect").mockReturnValue({
+        ...BOX,
+        x: BOX.left,
+        y: BOX.top,
+        right: BOX.left + BOX.width,
+        bottom: BOX.top + BOX.height,
+        toJSON: () => ({}),
+      });
+      return ref;
+    };
+    const speedOf = (body: Matter.Body) => Math.hypot(body.velocity.x, body.velocity.y);
+
+    it.each([
+      ["the center", 250, 300],
+      ["near a corner", 110, 160],
+      ["on its far edge", 400, 450],
+    ])("a press at %s flings the token out of the launcher's center", (_, x, y) => {
+      const ref = renderWithLauncher();
+      act(() => ref.current!.spawnAt(x, y));
+      const [token] = tokenBodies();
+      expect(token!.position).toEqual({ x: 250, y: 300 });
+      expect(speedOf(token!)).toBeGreaterThanOrEqual(FLING_MIN_SPEED - 1e-9);
+      expect(speedOf(token!)).toBeLessThanOrEqual(FLING_MAX_SPEED + 1e-9);
+      expect(overlayCanvas(document.body)).toHaveAttribute("data-tokens", "1");
+
+      // Ten frames are nine physics steps (the first frame only starts the clock). Even a launch
+      // straight up at the slowest speed, slowed by gravity, gets well clear of the center.
+      advanceFrames(10);
+      expect(
+        Math.hypot(token!.position.x - 250, token!.position.y - 300),
+        "it moved away from the center",
+      ).toBeGreaterThan(FLING_MIN_SPEED * 5);
+    });
+
+    it("a press anywhere else drops the token where it was, as before", () => {
+      const ref = renderWithLauncher();
+      act(() => ref.current!.spawnAt(600, 100));
+      const [token] = tokenBodies();
+      expect(token!.position).toEqual({ x: 600, y: 100 });
+      // A drop's toss: upward, and no more than 3px a step sideways.
+      expect(token!.velocity.y).toBeLessThan(0);
+      expect(Math.abs(token!.velocity.x)).toBeLessThanOrEqual(3);
+    });
+
+    it("flung tokens count toward the same cap", () => {
+      const ref = renderWithLauncher(3);
+      act(() => {
+        for (let i = 0; i < 5; i++) ref.current!.spawnAt(250, 300);
+      });
+      expect(tokenBodies()).toHaveLength(3);
+      expect(overlayCanvas(document.body)).toHaveAttribute("data-tokens", "3");
+    });
   });
 
   describe("at the viewport's edges", () => {
