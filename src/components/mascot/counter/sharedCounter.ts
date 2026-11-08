@@ -16,6 +16,8 @@ export interface SharedCounterOptions {
 export type CounterMode = "shared" | "local";
 
 const MAX_BACKOFF_MS = 30_000;
+/** The shortest wait after a 429, so `Retry-After: 0` can't set off a burst of requests. */
+export const MIN_RETRY_AFTER_MS = 1000;
 
 /**
  * The shared total as this visitor sees it, with presses batched, retried, and counted locally
@@ -85,11 +87,17 @@ export class SharedCounter {
     else if (this.unsent > 0) this.schedule(this.flushMs);
   }
 
-  /** Stops timers and sends any waiting presses once, without retrying (the page is going away). */
+  /**
+   * Stops timers and sends the waiting presses once, without retrying. It runs when the component
+   * unmounts and on `pagehide` (a tab close or full navigation, where React cleanup never runs), so
+   * the request uses `keepalive` to outlive the page. Calling it twice sends nothing more: the first
+   * call has already moved the presses out of `unsent`. It never starts a second request while one
+   * is out, so presses made while a request is out, or beyond one batch, are not sent.
+   */
   disconnect() {
     this.connected = false;
     this.clearTimer();
-    if (this.mode === "shared" && !this.busy && this.unsent > 0) void this.send();
+    if (this.mode === "shared" && !this.busy && this.unsent > 0) void this.send(true);
   }
 
   press() {
@@ -101,14 +109,15 @@ export class SharedCounter {
     }
   }
 
-  private async send() {
+  private async send(keepalive = false) {
     const by = Math.min(this.unsent, this.maxBatch);
     this.busy = true;
     this.unsent -= by;
     this.inFlight = by;
     let retryIn: number | undefined;
     try {
-      const total = by > 0 ? await this.client.increment(by) : await this.client.read();
+      const total =
+        by > 0 ? await this.client.increment(by, { keepalive }) : await this.client.read();
       this.succeeded(total, by);
     } catch (error) {
       const failure: CounterFailure =
@@ -142,7 +151,7 @@ export class SharedCounter {
     if (failure.kind === "rate-limited") {
       this.unsent += by;
       if (failure.retryAfterMs > this.maxRetryAfterMs) return this.fallBack();
-      return failure.retryAfterMs;
+      return Math.max(failure.retryAfterMs, MIN_RETRY_AFTER_MS);
     }
     if (failure.kind === "rejected") {
       this.unsent += by;

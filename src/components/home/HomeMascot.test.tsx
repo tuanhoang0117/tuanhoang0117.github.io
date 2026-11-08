@@ -23,6 +23,15 @@ vi.mock("../mascot/Mascot", async () => {
 
 const counter = () => screen.getByText(new RegExp(`^${mascotCounterLabel}:`));
 
+/** Renders, then logs each change to the counter's text from the first render on. */
+function recordAnnouncements(renderIt: () => void) {
+  renderIt();
+  const announced: string[] = [];
+  const observer = new MutationObserver(() => announced.push(counter().textContent ?? ""));
+  observer.observe(counter(), { childList: true, characterData: true, subtree: true });
+  return { announced, stop: () => observer.disconnect() };
+}
+
 describe("HomeMascot", () => {
   it("shows the prompt and a counter at 0 inside the mascot's group", () => {
     render(<HomeMascot />);
@@ -105,6 +114,78 @@ describe("HomeMascot", () => {
     expect(sent.length).toBeLessThan(4);
     expect(announced).toEqual([501, 502, 503, 504].map((n) => `${mascotCounterLabel}: ${n}`));
     expect(counter()).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("announces once more at load and once at an answer that shows others' presses", async () => {
+    let total = 500;
+    const client: CounterClient = {
+      kind: "http",
+      read: async () => total,
+      // Seven presses by other visitors land with this batch.
+      increment: async (by) => (total += by + 7),
+    };
+    const { announced, stop } = recordAnnouncements(() =>
+      render(<HomeMascot counterClient={client} counterOptions={{ flushMs: 20 }} />),
+    );
+    await screen.findByText(`${mascotCounterLabel}: 500`);
+    const user = userEvent.setup();
+    const button = screen.getByRole("button", { name: mascotLabel });
+    await user.click(button);
+    await user.click(button);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    stop();
+
+    expect(announced).toEqual([500, 501, 502, 509].map((n) => `${mascotCounterLabel}: ${n}`));
+  });
+
+  it("sends waiting presses once with keepalive when the page is hidden, not again on unmount", async () => {
+    const sent: { by: number; keepalive?: boolean }[] = [];
+    const client: CounterClient = {
+      kind: "http",
+      read: async () => 10,
+      increment: async (by, options) => {
+        sent.push({ by, keepalive: options?.keepalive });
+        return 10 + by;
+      },
+    };
+    const { unmount } = render(<HomeMascot counterClient={client} />);
+    await screen.findByText(`${mascotCounterLabel}: 10`);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: mascotLabel }));
+    await user.click(screen.getByRole("button", { name: mascotLabel }));
+
+    // Well inside the 1 s batch window, as when a tab closes right after a click.
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    });
+    expect(sent).toEqual([{ by: 2, keepalive: true }]);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    unmount();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(sent).toEqual([{ by: 2, keepalive: true }]);
+  });
+
+  it("keeps sending presses after the page comes back from the back-forward cache", async () => {
+    const sent: number[] = [];
+    let total = 10;
+    const client: CounterClient = {
+      kind: "http",
+      read: async () => total,
+      increment: async (by) => {
+        sent.push(by);
+        return (total += by);
+      },
+    };
+    render(<HomeMascot counterClient={client} counterOptions={{ flushMs: 20 }} />);
+    await screen.findByText(`${mascotCounterLabel}: 10`);
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: mascotLabel }));
+    await vi.waitFor(() => expect(sent).toEqual([1]));
   });
 
   it("keeps counting locally when the service is down", async () => {

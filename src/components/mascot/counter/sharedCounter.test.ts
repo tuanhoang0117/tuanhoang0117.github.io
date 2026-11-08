@@ -5,6 +5,7 @@ import { SharedCounter } from "./sharedCounter";
 interface Call {
   op: "read" | "increment";
   by: number;
+  keepalive: boolean;
   resolve: (total: number) => void;
   reject: (error: unknown) => void;
 }
@@ -27,13 +28,13 @@ class FakeServer implements CounterClient {
     return this.call("read", 0);
   }
 
-  increment(by: number) {
-    return this.call("increment", by);
+  increment(by: number, { keepalive = false } = {}) {
+    return this.call("increment", by, keepalive);
   }
 
-  private call(op: Call["op"], by: number) {
+  private call(op: Call["op"], by: number, keepalive = false) {
     return new Promise<number>((resolve, reject) => {
-      const call = { op, by, resolve, reject };
+      const call = { op, by, keepalive, resolve, reject };
       this.calls.push(call);
       this.open.push(call);
     });
@@ -345,6 +346,158 @@ describe("SharedCounter", () => {
     server.refuse(503);
     await wait(60_000);
     expect(server.increments).toEqual([3]);
+  });
+
+  it("sends presses on disconnect with keepalive, and batches without it", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    press(counter, 2);
+    await wait(1000);
+    server.ok();
+    await settle();
+    press(counter, 3);
+    counter.disconnect();
+    expect(server.calls.filter((c) => c.op === "increment").map((c) => c.keepalive)).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it("sends nothing more when it disconnects twice (pagehide, then React cleanup)", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    press(counter, 3);
+    counter.disconnect();
+    counter.disconnect();
+    expect(server.increments).toEqual([3]);
+    server.ok();
+    await settle();
+    counter.disconnect();
+    await wait(60_000);
+    expect(server.increments).toEqual([3]);
+    expect(server.total).toBe(3);
+  });
+
+  it("never starts a second request on disconnect while one is out", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    press(counter, 3);
+    await wait(1000);
+    expect(server.waiting).toBe(1);
+    press(counter, 2);
+    counter.disconnect();
+    expect(server.waiting).toBe(1);
+    expect(server.increments).toEqual([3]);
+    server.ok();
+    await settle();
+    await wait(60_000);
+    expect(server.increments).toEqual([3]);
+  });
+
+  it("waits at least a second after a 429 with Retry-After 0", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    press(counter, 3);
+    await wait(1000);
+    server.rateLimit(0);
+    await settle();
+    await wait(999);
+    expect(server.increments).toEqual([3]);
+    await wait(1);
+    expect(server.increments).toEqual([3, 3]);
+  });
+
+  it("doesn't count 429s toward falling back", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    press(counter, 3);
+    await wait(1000);
+    for (let i = 0; i < 6; i++) {
+      server.rateLimit(1000);
+      await settle();
+      await wait(1000);
+    }
+    expect(counter.getMode()).toBe("shared");
+    expect(server.increments).toEqual([3, 3, 3, 3, 3, 3, 3]);
+    server.ok();
+    await settle();
+    expect(server.total).toBe(3);
+  });
+
+  it("starts the failure count over after each success, so only failures in a row fall back", async () => {
+    const server = new FakeServer();
+    const counter = await connected(server);
+    for (let round = 0; round < 3; round++) {
+      // Three failures, one short of falling back, then a success.
+      for (let i = 0; i < 3; i++) {
+        press(counter, 1);
+        await wait(1000);
+        server.refuse(503);
+        await settle();
+        await wait(4000);
+      }
+      server.ok();
+      await settle();
+      expect(counter.getMode()).toBe("shared");
+    }
+    expect(server.total).toBe(9);
+    // The backoff starts over too: the next failure waits 1 s, not 8 s.
+    press(counter, 1);
+    await wait(1000);
+    server.refuse(503);
+    await settle();
+    await wait(1000);
+    expect(server.waiting).toBe(1);
+  });
+
+  it("never moves the shown number backwards when it settles a request that got no answer", async () => {
+    // Each case: what happened to the first batch of 3, then 2 more presses whose answer shows
+    // others' presses. Whether the 3 landed is read from how much the total grew beyond those 2,
+    // so 4 presses by others look the same as the 3 landing.
+    for (const { first, others, shown } of [
+      { first: "lose", others: 0, shown: 15 },
+      { first: "drop", others: 1, shown: 16 },
+      { first: "drop", others: 4, shown: 16 },
+    ] as const) {
+      const server = new FakeServer(10);
+      const counter = await connected(server);
+      const seen: number[] = [];
+      counter.subscribe(() => seen.push(counter.getCount()));
+      press(counter, 3);
+      await wait(1000);
+      server[first]();
+      await settle();
+      press(counter, 2);
+      await wait(1000);
+      server.ok(others);
+      await settle();
+      expect(seen, `${first}, others ${others}`).toEqual([...seen].sort((a, b) => a - b));
+      expect(counter.getCount(), `${first}, others ${others}`).toBe(shown);
+    }
+  });
+
+  it("settles a request that got no answer only once", async () => {
+    const server = new FakeServer(10);
+    const counter = await connected(server);
+    press(counter, 3);
+    await wait(1000);
+    server.lose();
+    await settle();
+    press(counter, 2);
+    await wait(1000);
+    server.ok();
+    await settle();
+    expect(counter.getCount()).toBe(15);
+
+    // Others press later; the 3 were already taken out of this visitor's own count.
+    const seen: number[] = [];
+    counter.subscribe(() => seen.push(counter.getCount()));
+    press(counter, 1);
+    await wait(1000);
+    server.ok(5);
+    await settle();
+    expect(seen).toEqual([16, 21]);
+    expect(server.total).toBe(21);
   });
 
   it("works the same over the local client", async () => {

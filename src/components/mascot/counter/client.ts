@@ -7,13 +7,17 @@ export interface CounterClient {
   readonly kind: "http" | "local";
   /** The current total. */
   read(): Promise<number>;
-  /** Adds `by` and resolves with the new total. */
-  increment(by: number): Promise<number>;
+  /**
+   * Adds `by` and resolves with the new total. `keepalive` lets the request outlive the page, for
+   * presses sent as it goes away.
+   */
+  increment(by: number, options?: { keepalive?: boolean }): Promise<number>;
 }
 
 /**
  * Why a request failed. The difference that matters is whether the server could have counted it:
- * - `network`: no answer (offline, refused, timed out). The request may or may not have arrived.
+ * - `network`: no answer (offline, refused, timed out, or a body that stopped partway). The request
+ *   may or may not have arrived.
  * - `rate-limited`: a 429. Not counted; try again after `retryAfterMs`.
  * - `rejected`: any other error status, which the Worker never counts. `retryable` for 5xx, not
  *   for 4xx (a 403 or 400 will never start working on its own). A 200 whose body has no count is
@@ -48,7 +52,10 @@ export function parseRetryAfter(value: string | null, now = Date.now()): number 
 
 export interface HttpCounterOptions {
   fetch?: typeof fetch;
-  /** A request with no answer by then is aborted and treated as a network failure. */
+  /**
+   * A request whose whole answer, body included, hasn't arrived by then is aborted and treated as a
+   * network failure.
+   */
   timeoutMs?: number;
 }
 
@@ -63,47 +70,78 @@ export function createHttpCounterClient(
 
   async function request(path: string, init: RequestInit): Promise<number> {
     const controller = new AbortController();
+    // Settles when the timer fires, so a stalled body can't outlast the timeout even if the fetch in
+    // use doesn't tie the body to the signal.
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener("abort", () => reject(new Error("timeout")));
+    });
+    timedOut.catch(() => {});
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let response: Response;
     try {
-      response = await fetchImpl(`${root}${path}`, { ...init, signal: controller.signal });
-    } catch {
-      throw new CounterError({ kind: "network" });
+      let response: Response;
+      try {
+        response = await Promise.race([
+          fetchImpl(`${root}${path}`, { ...init, signal: controller.signal }),
+          timedOut,
+        ]);
+      } catch {
+        throw new CounterError({ kind: "network" });
+      }
+      if (response.status === 429) {
+        throw new CounterError({
+          kind: "rate-limited",
+          retryAfterMs: parseRetryAfter(response.headers.get("Retry-After")),
+        });
+      }
+      if (!response.ok) {
+        throw new CounterError({
+          kind: "rejected",
+          status: response.status,
+          retryable: response.status >= 500,
+        });
+      }
+      let text: string;
+      try {
+        text = await Promise.race([response.text(), timedOut]);
+      } catch {
+        // The answer stopped partway (stalled or cut off): no answer, so not a bad one either.
+        response.body?.cancel().catch(() => {});
+        throw new CounterError({ kind: "network" });
+      }
+      const count = countIn(text);
+      if (count === undefined) {
+        // The server answered 200, so an increment did land; only the new total is unknown.
+        throw new CounterError({ kind: "rejected", status: response.status, retryable: false });
+      }
+      return count;
     } finally {
       clearTimeout(timer);
     }
-    if (response.status === 429) {
-      throw new CounterError({
-        kind: "rate-limited",
-        retryAfterMs: parseRetryAfter(response.headers.get("Retry-After")),
-      });
-    }
-    if (!response.ok) {
-      throw new CounterError({
-        kind: "rejected",
-        status: response.status,
-        retryable: response.status >= 500,
-      });
-    }
-    const body: unknown = await response.json().catch(() => undefined);
-    const count = (body as { count?: unknown } | undefined)?.count;
-    if (typeof count !== "number" || !Number.isFinite(count)) {
-      // The server answered 200, so an increment did land; only the new total is unknown.
-      throw new CounterError({ kind: "rejected", status: response.status, retryable: false });
-    }
-    return count;
   }
 
   return {
     kind: "http",
     read: () => request("/count", { method: "GET" }),
-    increment: (by) =>
+    increment: (by, { keepalive = false } = {}) =>
       request("/increment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ by }),
+        keepalive,
       }),
   };
+}
+
+/** The finite `count` in a JSON body, or undefined. */
+function countIn(text: string): number | undefined {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const count = (body as { count?: unknown } | null)?.count;
+  return typeof count === "number" && Number.isFinite(count) ? count : undefined;
 }
 
 /** Counts on this page only, starting at 0: the site's behavior with no endpoint configured. */
