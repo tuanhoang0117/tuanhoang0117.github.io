@@ -41,7 +41,7 @@ test.describe("/lab", () => {
 
     for (const sprite of sprites) {
       const { width, height } = size(sprite.frames[0]!);
-      const svgs = page.locator(`svg[data-sprite="${sprite.name}"]`);
+      const svgs = page.locator("main").locator(`svg[data-sprite="${sprite.name}"]`);
       await expect(svgs).toHaveCount(SCALES.length);
 
       for (const [i, scale] of SCALES.entries()) {
@@ -67,6 +67,7 @@ test.describe("/lab", () => {
     await page.goto("/lab");
     for (const sprite of sprites) {
       const problems = await page
+        .locator("main")
         .locator(`svg[data-sprite="${sprite.name}"]`)
         .first()
         .evaluate((svg) => {
@@ -97,7 +98,9 @@ test.describe("/lab", () => {
   test("multi-frame sprites animate", async ({ page }) => {
     await page.goto("/lab");
     for (const sprite of sprites.filter((s) => s.frames.length > 1)) {
-      const svg = page.locator(`svg[data-sprite="${sprite.name}"]`).first();
+      const svg = page.locator("main").locator(`svg[data-sprite="${sprite.name}"]`).first();
+      // Off-screen sprites pause by design, so bring each one into view before waiting on a frame.
+      await svg.scrollIntoViewIfNeeded();
       await expect(svg).toHaveAttribute("data-frame", "1", { timeout: 3000 });
     }
   });
@@ -125,7 +128,7 @@ test.describe("/lab", () => {
   test("has no horizontal overflow at 375px", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 740 });
     await page.goto("/lab");
-    await expect(page.locator("svg[data-sprite]").first()).toBeVisible();
+    await expect(page.locator("main svg[data-sprite]").first()).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );

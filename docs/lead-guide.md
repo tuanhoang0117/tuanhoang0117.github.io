@@ -5,7 +5,9 @@ shared files, and reports to Tuan. Any tool can be the lead. When one tool hits 
 another picks up from this guide and the handoff note, so nothing the lead knows may live only in
 one tool's memory.
 
-Read [agent-guide.md](agent-guide.md) and [agent-workflow.md](agent-workflow.md) first.
+Read [agent-guide.md](agent-guide.md) and [agent-workflow.md](agent-workflow.md) first. The
+workflow runs on a Windows workstation under WSL2; [workstation-setup.md](workstation-setup.md) sets
+one up and moves the lead from the Mac.
 
 ## The project
 
@@ -46,7 +48,10 @@ the issue or PR saying exactly where they stopped.
 ## Dispatching agents
 
 - **Claude Code:** the Agent tool with the `engineer`, `qa`, or `reviewer` type and
-  `isolation: worktree`.
+  `isolation: worktree`. QA and reviewers can't fetch a PR under the worktree guard, so for them
+  the lead prepares the worktree with `scripts/dispatch.sh <role> <number> --no-launch` (Tuan's
+  decision, 2026-10-29) and spawns the agent without `isolation`, with the Codex rule below: every
+  command runs inside that worktree, and the agent runs no git command that changes state.
 - **Codex:** built-in subagents (up to three at once), which run in the background and report back
   to the lead, like Claude's. They share the lead's folder, so give each one a worktree first:
   `scripts/dispatch.sh <role> <number> --no-launch` creates it (checked against the PR's head on
@@ -92,6 +97,13 @@ one PR race for the same `agent/review` check.
   agents, so Claude engineers stop at commit. Until that's fixed, the lead commits their staged
   work from the main session (Tuan's decision), after checking the files and message, and says so
   in the PR.
+- **Sprint 2:** The same guard refused the isolated QA agent and reviewer on #88 at
+  `as-bot.sh git fetch`, so neither could check out the PR. Both stopped instead of working around
+  it, and the lead didn't fetch for them. Tuan then allowed lead-prepared checkouts (see
+  Dispatching agents).
+- **Sprint 2:** #80's "never covers a page title" test measured the title mid-entrance, while it
+  was still sliding up from below, so it passed against a real 3px overlap and failed about 1 run
+  in 9. Layout tests measure after `document.getAnimations()` have finished.
 - **Sprint 1:** Two engineers wrote commit messages to the same fixed scratch file, and one
   overwrote the other. Agents use `mktemp` files and per-agent scratch folders.
 - **Sprint 1:** A reviewer's deliberate break was silently refused, so its "failing" run tested

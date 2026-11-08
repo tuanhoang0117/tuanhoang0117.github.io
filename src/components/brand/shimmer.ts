@@ -23,13 +23,13 @@ export const SHIMMER_GRADIENT = `linear-gradient(120deg, ${[
   "var(--color-ink) 100%",
 ].join(", ")})`;
 
-/** About 7 s each way, alternating, like a slow holographic drift. */
+/** About 3.5 s each way, alternating: a lively holographic drift (the owner asked for faster). */
 export const SHIMMER_KEYFRAMES: Keyframe[] = [
   { backgroundPosition: "10% 20%" },
   { backgroundPosition: "70% 80%" },
 ];
 const SHIMMER_TIMING: KeyframeAnimationOptions = {
-  duration: 7000,
+  duration: 3500,
   easing: "ease-in-out",
   direction: "alternate",
   iterations: Infinity,

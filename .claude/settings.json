@@ -5,5 +5,8 @@
     "GIT_CONFIG_KEY_0": "credential.helper",
     "GIT_CONFIG_VALUE_0": "",
     "GIT_TERMINAL_PROMPT": "0"
+  },
+  "permissions": {
+    "deny": ["Read(~/.config/tuanhoang-bot/**)"]
   }
 }
