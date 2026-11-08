@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FocusEvent,
   type MouseEvent,
 } from "react";
@@ -24,6 +25,31 @@ export const MENU_REVEAL_START_MS = 250;
 export const MENU_REVEAL_STEP_MS = 70;
 
 const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+export const REDUCED_TRANSPARENCY_QUERY = "(prefers-reduced-transparency: reduce)";
+
+/**
+ * The panel's frosted glass, the one exception to "no blur" (docs/design-system.md). Applied only
+ * where backdrop-filter works; anywhere else the panel stays opaque paper. The tint keeps ink
+ * links above 7:1 even over solid ink, and the page behind is dimmed besides.
+ */
+export const MENU_GLASS = [
+  "supports-backdrop-filter:bg-card/70",
+  "supports-backdrop-filter:backdrop-blur-xl",
+  "supports-backdrop-filter:backdrop-saturate-150",
+].join(" ");
+
+function subscribeReducedTransparency(onChange: () => void) {
+  if (typeof window.matchMedia !== "function") return () => {};
+  const query = window.matchMedia(REDUCED_TRANSPARENCY_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function prefersReducedTransparency(): boolean {
+  return (
+    typeof window.matchMedia === "function" && window.matchMedia(REDUCED_TRANSPARENCY_QUERY).matches
+  );
+}
 
 function canHover(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia(HOVER_QUERY).matches;
@@ -147,6 +173,11 @@ export function Nav() {
   };
 
   const reduced = prefersReducedMotion();
+  const opaque = useSyncExternalStore(
+    subscribeReducedTransparency,
+    prefersReducedTransparency,
+    () => false,
+  );
   const line = "absolute top-1/2 left-2.5 -mt-px h-0.5 w-5 bg-ink transition duration-400 ease-out";
 
   return (
@@ -190,16 +221,18 @@ export function Nav() {
             id={panelId}
             inert={!open}
             data-state={open ? "open" : "closed"}
+            data-surface={opaque ? "opaque" : "glass"}
             onMouseEnter={onPointerEnter}
             onMouseLeave={onPointerLeave}
             className={[
-              "pointer-events-auto absolute inset-y-0 right-0 flex w-5/6 max-w-4xl flex-col justify-center overflow-y-auto bg-ink px-6 py-20 transition-all duration-550 sm:w-2/3 sm:px-12",
+              "pointer-events-auto absolute inset-y-0 right-0 flex w-5/6 max-w-4xl flex-col justify-center overflow-y-auto border-l-2 border-card bg-paper px-6 py-20 transition-all duration-550 sm:w-2/3 sm:px-12",
+              opaque ? "" : MENU_GLASS,
               open ? "visible translate-x-0 ease-out" : "invisible translate-x-full ease-in",
             ].join(" ")}
           >
-            <ul className="border-t border-seal">
+            <ul className="border-t border-ink/30">
               {navLinks.map((link, i) => (
-                <li key={link.href} className="border-b border-seal">
+                <li key={link.href} className="border-b border-ink/30">
                   <NavLink
                     ref={i === 0 ? firstLinkRef : undefined}
                     to={link.href}
@@ -208,9 +241,7 @@ export function Nav() {
                     className={({ isActive }) =>
                       [
                         "block py-3 text-right font-display text-3xl leading-none uppercase sm:py-4 sm:text-5xl lg:text-7xl",
-                        isActive
-                          ? "text-canyon"
-                          : "text-kennedy hover:text-canyon focus-visible:text-canyon",
+                        isActive ? "text-poly" : "text-ink hover:text-poly focus-visible:text-poly",
                       ].join(" ")
                     }
                   >
