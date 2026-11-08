@@ -110,83 +110,128 @@ interface Placement {
   tile: string;
 }
 
-/**
- * Every drawImage into the mascot's canvas from call `from` on, unpacked into the glyph tiles it
- * copied, in drawing order. A strip's copies are known from the calls that built it; a copy is in
- * a draw when its ink is, and a draw that cuts through a copy's ink fails the test.
- */
-const unpackDraws = (from = 0) => {
-  const { calls, contexts } = env.drawImage.mock;
-  const copies = new Map<unknown, { x: number; y: number; sx: number; sy: number }[]>();
-  const draws: { wide: boolean; placements: Placement[] }[] = [];
-  calls.forEach((args, k) => {
-    const target = (contexts[k] as { canvas: HTMLCanvasElement }).canvas;
-    const [src, sx, sy, sw, sh, dx, dy, dw, dh] = args as [unknown, ...number[]];
-    if (target !== canvas) {
-      const list = copies.get(target) ?? [];
-      list.push({ x: dx!, y: dy!, sx: sx!, sy: sy! });
-      copies.set(target, list);
-      return;
-    }
-    if (k < from) return;
-    expect([dw, dh], "copied at the source's own size").toEqual([sw, sh]);
-    for (const n of [sx, sy, dx, dy, sw]) expect(Number.isInteger(n)).toBe(true);
-    const tile = sh!;
-    const placements: Placement[] = [];
-    let wide = false;
-    for (const copy of copies.get(src) ?? []) {
-      if (copy.y !== sy) continue;
-      const glyph = copy.sx / tile;
-      const [left, right] = inkOf(glyph, tile).map((c) => copy.x + c) as [number, number];
-      if (right < sx! || left >= sx! + sw!) continue;
-      expect(left >= sx! && right < sx! + sw!, `draw ${k} cuts a glyph's ink`).toBe(true);
-      wide ||= WIDE.has(glyph);
-      placements.push({ x: dx! + copy.x - sx!, y: dy!, tile: `${copy.sx},${copy.sy}` });
-    }
-    expect(placements.length, `draw ${k} copies at least one glyph`).toBeGreaterThan(0);
-    draws.push({ wide, placements });
-  });
-  return draws;
-};
+interface Draw {
+  wide: boolean;
+  placements: Placement[];
+}
 
 /**
- * Starts a fresh renderer (in a fresh test env) and records, for each of 30 frames 100 ms apart,
- * what it drew. A pulse at frame 10 adds the ripple.
+ * Returns a function that unpacks each drawImage into `target` made since its last call into the
+ * glyph tiles it copied, in drawing order. A strip's copies are known from the calls that built
+ * it; a copy is in a draw when its ink is, and a draw that cuts through a copy's ink fails the
+ * test. Each call is read once, and the checks only build an assertion when one fails: a
+ * recording is tens of thousands of draws.
  */
-const recordFrames = async ({ readable, dpr = 1 }: { readable: boolean; dpr?: number }) => {
-  renderer?.destroy();
-  canvas?.remove();
-  env.restore();
-  env = installMascotTestEnv({ size: 400 });
-  vi.stubGlobal("devicePixelRatio", dpr);
-  fakeContexts(readable);
-  await start();
-  const frames = [unpackDraws()];
-  for (let frame = 1; frame < 30; frame++) {
-    if (frame === 10) renderer!.pulse(0.3, 0.6);
-    const from = env.drawImage.mock.calls.length;
-    env.runFrame(100);
-    frames.push(unpackDraws(from));
+const drawReader = (env: MascotTestEnv, target: HTMLCanvasElement) => {
+  // Per strip canvas, per row of it (y), the glyph copies drawn into that row.
+  const copies = new Map<unknown, Map<number, { x: number; sx: number; sy: number }[]>>();
+  let read = 0;
+  return () => {
+    const { calls, contexts } = env.drawImage.mock;
+    const draws: Draw[] = [];
+    for (; read < calls.length; read++) {
+      const k = read;
+      const into = (contexts[k] as { canvas: HTMLCanvasElement }).canvas;
+      const [src, sx, sy, sw, sh, dx, dy, dw, dh] = calls[k] as [unknown, ...number[]];
+      if (into !== target) {
+        const rows = copies.get(into) ?? new Map<number, { x: number; sx: number; sy: number }[]>();
+        copies.set(into, rows);
+        const row = rows.get(dy!) ?? [];
+        rows.set(dy!, row);
+        row.push({ x: dx!, sx: sx!, sy: sy! });
+        continue;
+      }
+      if (dw !== sw || dh !== sh) {
+        expect([dw, dh], `draw ${k} copied at the source's own size`).toEqual([sw, sh]);
+      }
+      for (const n of [sx, sy, dx, dy, sw]) {
+        if (!Number.isInteger(n)) expect.unreachable(`draw ${k} at ${n}, not a whole pixel`);
+      }
+      const tile = sh!;
+      const placements: Placement[] = [];
+      let wide = false;
+      for (const copy of copies.get(src)?.get(sy!) ?? []) {
+        const glyph = copy.sx / tile;
+        const [inkLeft, inkRight] = inkOf(glyph, tile);
+        const left = copy.x + inkLeft;
+        const right = copy.x + inkRight;
+        if (right < sx! || left >= sx! + sw!) continue;
+        if (left < sx! || right >= sx! + sw!) expect.unreachable(`draw ${k} cuts a glyph's ink`);
+        wide ||= WIDE.has(glyph);
+        placements.push({ x: dx! + copy.x - sx!, y: dy!, tile: `${copy.sx},${copy.sy}` });
+      }
+      if (placements.length === 0) expect.unreachable(`draw ${k} copies no glyph`);
+      draws.push({ wide, placements });
+    }
+    return draws;
+  };
+};
+
+/** Frames per recording, 100 ms apart. A pulse at frame 10 adds the ripple. */
+const RECORDED_FRAMES = 30;
+
+/**
+ * Starts a renderer in a test env of its own and records what it drew on each frame. Nothing here
+ * is shared with other tests, and it stops at the next frame once `signal` aborts (the test timed
+ * out), so a case still running after a timeout can't read or tear down another case's draws.
+ */
+const recordFrames = async ({
+  readable,
+  dpr,
+  signal,
+}: {
+  readable: boolean;
+  dpr: number;
+  signal: AbortSignal;
+}) => {
+  const env = installMascotTestEnv({ size: 400 });
+  const canvas = document.createElement("canvas");
+  let renderer: MascotRenderer | null = null;
+  try {
+    vi.stubGlobal("devicePixelRatio", dpr);
+    fakeContexts(readable);
+    document.body.append(canvas);
+    renderer = startMascotRenderer(canvas, {
+      source: { kind: "procedural-placeholder" },
+      reducedMotion: false,
+      pointerTarget: canvas,
+    });
+    await settle();
+    signal.throwIfAborted();
+    const read = drawReader(env, canvas);
+    const frames = [read()];
+    for (let frame = 1; frame < RECORDED_FRAMES; frame++) {
+      signal.throwIfAborted();
+      if (frame === 10) renderer.pulse(0.3, 0.6);
+      env.runFrame(100);
+      frames.push(read());
+    }
+    return frames;
+  } finally {
+    renderer?.destroy();
+    canvas.remove();
+    env.restore();
   }
-  return frames;
 };
 
 const placementsOf = (draws: { placements: Placement[] }[]) =>
   draws.flatMap(({ placements }) => placements);
 
-beforeEach(() => {
-  env = installMascotTestEnv({ size: 400 });
-  turn.mockClear();
-});
-afterEach(() => {
-  renderer?.destroy();
-  renderer = null;
-  canvas.remove();
-  env.restore();
-  fullBleed = false;
-});
+const placementKey = ({ x, y, tile }: Placement) => `${x},${y}@${tile}`;
 
 describe("startMascotRenderer", () => {
+  beforeEach(() => {
+    env = installMascotTestEnv({ size: 400 });
+    turn.mockClear();
+  });
+  afterEach(() => {
+    renderer?.destroy();
+    renderer = null;
+    canvas.remove();
+    env.restore();
+    fullBleed = false;
+  });
+
   it("turns the model only when its whole-degree angle changes", async () => {
     await start();
     expect(canvas.dataset.state).toBe("running");
@@ -249,40 +294,13 @@ describe("startMascotRenderer", () => {
     }
   });
 
-  it.each([1, 1.5])(
-    "at a %s× pixel ratio, copies runs of glyphs in one call each, placing every glyph as one call per cell would",
-    async (dpr) => {
-      // One call per cell: the atlas can't be read back, so no glyph's ink is known.
-      const reference = await recordFrames({ readable: false, dpr });
-      const batched = await recordFrames({ readable: true, dpr });
-      expect(batched).toHaveLength(reference.length);
-      let referenceCalls = 0;
-      let batchedCalls = 0;
-      let wideDraws = 0;
-      reference.forEach((draws, frame) => {
-        for (const { placements } of draws) expect(placements).toHaveLength(1);
-        // The same glyphs at the same places, in the same order.
-        expect(placementsOf(batched[frame]!), `frame ${frame}`).toEqual(placementsOf(draws));
-        for (const { wide, placements } of batched[frame]!) {
-          // A glyph whose ink is wider than the spacing would overlap its neighbor: never batched.
-          if (wide) expect(placements, `frame ${frame}`).toHaveLength(1);
-          if (wide) wideDraws++;
-        }
-        referenceCalls += draws.length;
-        batchedCalls += batched[frame]!.length;
-      });
-      expect(wideDraws).toBeGreaterThan(0);
-      expect(batchedCalls).toBeLessThan(referenceCalls * 0.7);
-    },
-  );
-
   it("never runs a batch of glyphs past the end of a row", async () => {
     // A flat image filling the whole canvas, first frame (no wave yet): every row is one long
     // run of the same glyph, right up to its last cell.
     fullBleed = true;
     fakeContexts(true);
     await start();
-    const draws = unpackDraws();
+    const draws = drawReader(env, canvas)();
     const rows = new Map<number, number[]>();
     for (const { x, y } of placementsOf(draws)) rows.set(y, [...(rows.get(y) ?? []), x]);
     expect(rows.size).toBeGreaterThan(10);
@@ -302,4 +320,43 @@ describe("startMascotRenderer", () => {
     env.runFrame(1000);
     expect(turn).not.toHaveBeenCalled();
   });
+});
+
+// No shared setup here: each recording builds and tears down its own test env.
+describe("startMascotRenderer", () => {
+  // A safety margin for slow runners, not the budget: a case takes about 150 ms locally.
+  it.for([1, 1.5])(
+    "at a %s× pixel ratio, copies runs of glyphs in one call each, placing every glyph as one call per cell would",
+    { timeout: 30_000 },
+    async (dpr, { signal }) => {
+      // One call per cell: the atlas can't be read back, so no glyph's ink is known.
+      const reference = await recordFrames({ readable: false, dpr, signal });
+      const batched = await recordFrames({ readable: true, dpr, signal });
+      expect(batched).toHaveLength(reference.length);
+      let referenceCalls = 0;
+      let batchedCalls = 0;
+      let wideDraws = 0;
+      // A frame is a few thousand draws, so each check is a plain comparison first, and the
+      // assertion that explains a failure only runs when that comparison fails.
+      reference.forEach((draws, frame) => {
+        const runs = draws.filter(({ placements }) => placements.length !== 1);
+        if (runs.length > 0) expect(runs, `frame ${frame}, one glyph per call`).toEqual([]);
+        // The same glyphs at the same places, in the same order.
+        const want = placementsOf(draws);
+        const got = placementsOf(batched[frame]!);
+        if (got.map(placementKey).join(" ") !== want.map(placementKey).join(" ")) {
+          expect(got, `frame ${frame}`).toEqual(want);
+        }
+        const wide = batched[frame]!.filter((draw) => draw.wide);
+        // A glyph whose ink is wider than the spacing would overlap its neighbor: never batched.
+        const wideRuns = wide.filter(({ placements }) => placements.length !== 1);
+        if (wideRuns.length > 0) expect(wideRuns, `frame ${frame}, wide glyphs`).toEqual([]);
+        wideDraws += wide.length;
+        referenceCalls += draws.length;
+        batchedCalls += batched[frame]!.length;
+      });
+      expect(wideDraws).toBeGreaterThan(0);
+      expect(batchedCalls).toBeLessThan(referenceCalls * 0.7);
+    },
+  );
 });
