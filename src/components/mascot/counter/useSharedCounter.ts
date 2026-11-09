@@ -20,7 +20,19 @@ export function useSharedCounter(
 
   useEffect(() => {
     counter.connect();
-    return () => counter.disconnect();
+    // A tab close or full navigation never runs React cleanup, so `pagehide` sends what's waiting.
+    // A page restored from the back-forward cache picks up where it left off.
+    const hide = () => counter.disconnect();
+    const show = (event: PageTransitionEvent) => {
+      if (event.persisted) counter.connect();
+    };
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+      counter.disconnect();
+    };
   }, [counter]);
 
   const count = useSyncExternalStore(counter.subscribe, counter.getCount);
