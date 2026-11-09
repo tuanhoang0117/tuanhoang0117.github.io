@@ -22,8 +22,9 @@ interface HomeMascotProps {
  * The home page's mustang, with a "Click me" prompt and the press counter on one line above it.
  * The counter shows the total shared by every visitor (local to this page when the service is off
  * or down), moves by one at once on every click, tap, Enter, and Space, and is a polite live
- * region, so screen readers hear the new total without losing focus. Sending presses in batches
- * doesn't change the text, so it adds no announcements.
+ * region, so screen readers hear the new total without losing focus. Beyond one announcement per
+ * press, the text changes once when the shared total first loads, and once when a batch's answer
+ * shows that other visitors pressed too. A batch with no one else's presses changes nothing.
  */
 export function HomeMascot({ onActivate, counterClient, counterOptions }: HomeMascotProps) {
   const reduced = useReducedMotion();

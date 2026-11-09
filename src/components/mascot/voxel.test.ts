@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mustyIdle } from "../../pixel/sprites/musty-idle";
 import { luminance, type Raster } from "./sampling";
-import { artToRaster, SILHOUETTE_SPAN } from "./source";
+import { artToRaster, SILHOUETTE_SPAN, SOURCE_SIZE } from "./source";
 import {
   buildVoxelModel,
   createRaster,
@@ -276,5 +276,21 @@ describe("renderVoxels", () => {
     const fresh = render(Math.PI / 2);
     renderVoxels(model, Math.PI / 2, r, SILHOUETTE_SPAN);
     expect(r.data).toEqual(fresh.data);
+  });
+
+  // Pins every byte the model draws, so a change to its shading (the depth cue, the side faces'
+  // albedo, the slope lookup) can't pass unnoticed. The hash is the one #109 recorded before and
+  // after its refactor: SHA-256 over the production-size raster at each whole degree, 0–359, in
+  // order. If the look is meant to change, update it in the same PR and say so.
+  it("draws the same bytes at every whole degree as when the look was approved", async () => {
+    const raster = createRaster(SOURCE_SIZE);
+    const all = new Uint8Array(360 * raster.data.length);
+    for (let degrees = 0; degrees < 360; degrees++) {
+      renderVoxels(model, (degrees * Math.PI) / 180, raster, SILHOUETTE_SPAN);
+      all.set(raster.data, degrees * raster.data.length);
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", all));
+    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+    expect(hex.slice(0, 16)).toBe("c7ba591bf26c137a");
   });
 });
