@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { navLinks } from "../src/content/site";
+import { contrastRatio, type Color } from "./helpers/checkContrast";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 const toggle = (page: Page) => nav(page).getByRole("button", { name: /menu$/ });
@@ -99,6 +100,110 @@ async function seriousViolations(page: Page) {
   return violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
     .map((v) => `${v.id}: ${v.help}`);
+}
+
+/** Any CSS color (oklab, color-mix, hex) as 0-255 RGBA, read back through a canvas. */
+function rgba(page: Page, colors: string[]): Promise<Color[]> {
+  return page.evaluate((list) => {
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    return list.map((color) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      return { r: r!, g: g!, b: b!, a: a! / 255 };
+    });
+  }, colors);
+}
+
+/** The open panel's surface: its backdrop filter, tint and left edge (colors as RGBA). */
+async function surface(page: Page) {
+  const style = await (
+    await panel(page)
+  ).evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return {
+      backdropFilter: cs.backdropFilter,
+      tint: cs.backgroundColor,
+      edge: cs.borderLeftColor,
+      edgeWidth: cs.borderLeftWidth,
+    };
+  });
+  const [tint, edge] = await rgba(page, [style.tint, style.edge]);
+  return { ...style, tint: tint!, edge: edge! };
+}
+
+/** Chromium's media emulation; Playwright's emulateMedia has no option for this query. */
+async function emulateReducedTransparency(page: Page, value: "reduce" | "no-preference") {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value }],
+  });
+}
+
+/**
+ * Contrast of each link against what is actually rendered behind its text: the link boxes are
+ * screenshotted with the text hidden, and the link color is checked against the darkest and the
+ * lightest pixel of that backdrop.
+ */
+async function linkContrastOverPage(page: Page) {
+  const links = (await panel(page)).getByRole("link");
+  const hidden = await page.addStyleTag({
+    content: "[data-menu-label] { color: transparent !important; }",
+  });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+  const backdrops: Color[][] = [];
+  // One full-viewport shot, cropped per link. A clipped screenshot above 1x pixel density
+  // renders without the backdrop blur, so it would measure a panel nobody sees.
+  const shot = (await page.screenshot()).toString("base64");
+  for (let i = 0; i < navLinks.length; i++) {
+    const box = (await links.nth(i).boundingBox())!;
+    const crop = { x: box.x + 2, y: box.y + 2, width: box.width - 4, height: box.height - 4 };
+    backdrops.push(
+      await page.evaluate(
+        async ({ png, crop }) => {
+          const img = new Image();
+          img.src = `data:image/png;base64,${png}`;
+          await img.decode();
+          const scale = img.width / window.innerWidth;
+          const [x, y] = [Math.round(crop.x * scale), Math.round(crop.y * scale)];
+          const [w, h] = [Math.round(crop.width * scale), Math.round(crop.height * scale)];
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+          ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+          const data = ctx.getImageData(0, 0, w, h).data;
+          const lum = (c: number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+          let lo = [255, 255, 255];
+          let hi = [0, 0, 0];
+          for (let j = 0; j < data.length; j += 4) {
+            const px = [data[j]!, data[j + 1]!, data[j + 2]!];
+            if (lum(px) < lum(lo)) lo = px;
+            if (lum(px) > lum(hi)) hi = px;
+          }
+          return [lo, hi].map(([r, g, b]) => ({ r: r!, g: g!, b: b!, a: 1 }));
+        },
+        { png: shot, crop },
+      ),
+    );
+  }
+  await hidden.evaluate((el) => (el as Element).remove());
+  const colors = await rgba(
+    page,
+    await links.evaluateAll((els) => els.map((el) => getComputedStyle(el).color)),
+  );
+  const fmt = (c: Color) => `rgb(${c.r}, ${c.g}, ${c.b})`;
+  return navLinks.map((l, i) => {
+    const [darkest, lightest] = backdrops[i]!;
+    const text = colors[i]!;
+    return {
+      label: l.label,
+      ratio: Math.min(contrastRatio(text, darkest!), contrastRatio(text, lightest!)),
+      text: fmt(text),
+      backdrop: `${fmt(darkest!)} to ${fmt(lightest!)}`,
+    };
+  });
 }
 
 test.describe("menu", () => {
@@ -333,6 +438,126 @@ test.describe("menu", () => {
     expect(await seriousViolations(page)).toEqual([]);
     await openByPointer(page, isMobile);
     await settle(page);
+    expect(await seriousViolations(page)).toEqual([]);
+  });
+
+  test("the open panel is frosted glass: heavy backdrop blur, light tint, bright edge", async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto("/");
+    await openByPointer(page, isMobile);
+    await settle(page);
+    const s = await surface(page);
+    // A thin tint lets the page show through; the blur has to be heavy to keep links readable.
+    const blur = Number(s.backdropFilter.match(/blur\(([\d.]+)px\)/)?.[1]);
+    expect(blur).toBeGreaterThanOrEqual(48);
+    // Light (near-white) and see-through, but solid enough to carry text over anything.
+    expect(s.tint.a).toBeGreaterThan(0.5);
+    expect(s.tint.a).toBeLessThan(0.9);
+    expect(Math.min(s.tint.r, s.tint.g, s.tint.b)).toBeGreaterThanOrEqual(240);
+    expect(s.edge).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(s.edgeWidth).toBe("2px");
+  });
+
+  test("the glass tint keeps every link color at 4.5:1 even over solid black", async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto("/");
+    await openByPointer(page, isMobile);
+    await settle(page);
+    const { tint } = await surface(page);
+    // The darkest anything behind the panel can be. Blur only averages, so it can't go darker.
+    const overBlack = { r: tint.r * tint.a, g: tint.g * tint.a, b: tint.b * tint.a, a: 1 };
+    const linkColors = await rgba(
+      page,
+      await (
+        await panel(page)
+      )
+        .getByRole("link")
+        .evaluateAll((els) => els.map((el) => getComputedStyle(el).color)),
+    );
+    // Hover and focus use the current-page color, so these two cover every state.
+    expect(new Set(linkColors.map((c) => `${c.r},${c.g},${c.b}`)).size).toBe(2);
+    for (const c of linkColors) expect(contrastRatio(c, overBlack)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const target of navLinks) {
+    test(`over ${target.href}, every link reads at 4.5:1 against the pixels behind it`, async ({
+      page,
+      isMobile,
+    }) => {
+      await page.goto(target.href);
+      // Let the page's entrances (mascot, cards) finish so the whole page is behind the panel.
+      // Looping animations (the title shimmer, idle sprites) never finish, so they're skipped.
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+            .map((a) => a.finished.catch(() => {})),
+        ),
+      );
+      await openByPointer(page, isMobile);
+      await settle(page);
+      const results = await linkContrastOverPage(page);
+      const low = results.filter((r) => r.ratio < 4.5);
+      expect(low, JSON.stringify(results, null, 1)).toEqual([]);
+    });
+  }
+
+  test("reduced transparency: the panel is opaque, and turns to glass when the setting is off", async ({
+    page,
+    isMobile,
+  }) => {
+    await emulateReducedTransparency(page, "reduce");
+    await page.goto("/");
+    // The emulation reached the page, so the result below isn't a default.
+    expect(
+      await page.evaluate(() => matchMedia("(prefers-reduced-transparency: reduce)").matches),
+    ).toBe(true);
+    await openByPointer(page, isMobile);
+    await settle(page);
+    const opaque = await surface(page);
+    expect(opaque.backdropFilter).toBe("none");
+    expect(opaque.tint.a).toBe(1);
+    expect(await seriousViolations(page)).toEqual([]);
+
+    // The panel follows the setting live, without a reload.
+    await emulateReducedTransparency(page, "no-preference");
+    await settle(page);
+    const glass = await surface(page);
+    expect(glass.backdropFilter).toMatch(/blur\(\d/);
+    expect(glass.tint.a).toBeLessThan(1);
+  });
+
+  test("without backdrop-filter support, the panel is opaque", async ({ page, isMobile }) => {
+    await page.goto("/");
+    // A browser without backdrop-filter skips every @supports block that tests for it. Chromium
+    // supports it, so delete those blocks to get the same stylesheet such a browser would apply.
+    const removed = await page.evaluate(() => {
+      let count = 0;
+      const prune = (list: CSSRuleList, remove: (i: number) => void) => {
+        for (let i = list.length - 1; i >= 0; i--) {
+          const rule = list[i]!;
+          if (rule instanceof CSSSupportsRule && rule.conditionText.includes("backdrop-filter")) {
+            remove(i);
+            count++;
+          } else if (rule instanceof CSSGroupingRule || rule instanceof CSSStyleRule) {
+            prune(rule.cssRules, (j) => rule.deleteRule(j));
+          }
+        }
+      };
+      for (const sheet of document.styleSheets) prune(sheet.cssRules, (i) => sheet.deleteRule(i));
+      return count;
+    });
+    expect(removed).toBeGreaterThan(0);
+    await openByPointer(page, isMobile);
+    await settle(page);
+    const s = await surface(page);
+    expect(s.backdropFilter).toBe("none");
+    expect(s.tint.a).toBe(1);
     expect(await seriousViolations(page)).toEqual([]);
   });
 

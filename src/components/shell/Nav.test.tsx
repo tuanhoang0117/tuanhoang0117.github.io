@@ -3,7 +3,14 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navLinks } from "../../content/site";
-import { MENU_FOCUS_DELAY_MS, MENU_HOVER_CLICK_GRACE_MS, MENU_LEAVE_GRACE_MS, Nav } from "./Nav";
+import {
+  MENU_FOCUS_DELAY_MS,
+  MENU_GLASS,
+  MENU_HOVER_CLICK_GRACE_MS,
+  MENU_LEAVE_GRACE_MS,
+  Nav,
+  REDUCED_TRANSPARENCY_QUERY,
+} from "./Nav";
 
 /** Installs a matchMedia that answers whether the device can hover with a fine pointer. */
 function stubMedia({ hover = false, reduced = false } = {}) {
@@ -241,5 +248,37 @@ describe("Nav", () => {
     act(() => vi.advanceTimersByTime(MENU_HOVER_CLICK_GRACE_MS));
     pointerClick(toggle());
     expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("is frosted glass by default, opaque paper underneath", () => {
+    renderAt("/");
+    expect(panel()).toHaveAttribute("data-surface", "glass");
+    expect(panel()).toHaveClass("bg-paper", ...MENU_GLASS.split(" "));
+  });
+
+  it("drops the glass for reduced transparency, and follows the setting live", () => {
+    let reduce = true;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === REDUCED_TRANSPARENCY_QUERY && reduce,
+      media: query,
+      addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+    }));
+    renderAt("/");
+    expect(panel()).toHaveAttribute("data-surface", "opaque");
+    expect(panel()).toHaveClass("bg-paper");
+    for (const glass of MENU_GLASS.split(" ")) expect(panel()).not.toHaveClass(glass);
+
+    reduce = false;
+    act(() => listeners.forEach((fn) => fn()));
+    expect(panel()).toHaveAttribute("data-surface", "glass");
+    expect(panel()).toHaveClass(...MENU_GLASS.split(" "));
+  });
+
+  it("gates every glass class on backdrop-filter support", () => {
+    const classes = MENU_GLASS.split(" ");
+    expect(classes.length).toBeGreaterThan(0);
+    for (const c of classes) expect(c).toMatch(/^supports-backdrop-filter:/);
   });
 });
