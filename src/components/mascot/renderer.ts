@@ -21,6 +21,11 @@ import { createRaster, easeTurn, REST_ANGLE, REST_PHASE, SPIN_BASE_SPEED } from 
 /** Share of the canvas's shorter side the mascot covers, leaving room for parallax to move. */
 const COVER = 0.94;
 const GLYPHS = [...FILL_RAMP, ...OUTLINE_RAMP];
+const TILES = GLYPHS.length * COLOR_RAMP.length;
+/** The longest run of identical neighboring glyphs copied with one `drawImage`. */
+const RUN = 16;
+/** Column spacings that take more columns than this to repeat are not batched. */
+const MAX_PERIOD = 8;
 
 /**
  * Lighter settings for devices that would struggle: fewer frames and a smaller backing store.
@@ -30,6 +35,29 @@ function deviceProfile() {
   const nav = navigator as Navigator & { deviceMemory?: number };
   const low = (nav.deviceMemory ?? 8) < 4 || (nav.hardwareConcurrency ?? 8) < 4;
   return low ? { fps: 30, maxDpr: 1.5 } : { fps: 60, maxDpr: 3 };
+}
+
+/** The extra idle speeds one press adds to the spin, so a single press spins about 4× idle. */
+export const SPIN_BOOST = 3;
+/** Rapid presses stack, but the spin never goes faster than this many times idle. */
+export const SPIN_BOOST_MAX = 8;
+/** The boost eases out exponentially, falling to 1/e of itself every this many seconds. */
+export const SPIN_BOOST_SECONDS = 0.45;
+/**
+ * Below this many extra idle speeds the boost snaps to none. With the time constant above, one
+ * press is back to idle about 1.5 s later, and a boost at the cap about 1.9 s later.
+ */
+export const SPIN_BOOST_REST = 0.1;
+
+/** The boost after one more press: `SPIN_BOOST` more, up to the cap. */
+export function addSpinBoost(boost: number): number {
+  return Math.min(boost + SPIN_BOOST, SPIN_BOOST_MAX - 1);
+}
+
+/** The boost `seconds` later. It eases toward none, fastest at first, and then stops at none. */
+export function decaySpinBoost(boost: number, seconds: number): number {
+  const next = boost * Math.exp(-seconds / SPIN_BOOST_SECONDS);
+  return next < SPIN_BOOST_REST ? 0 : next;
 }
 
 /** An angle in radians as whole degrees (0–359): what `data-angle` shows and the model turns to. */
@@ -51,6 +79,8 @@ export interface MascotRenderer {
   setActive(active: boolean): void;
   /** Sends a ripple out from a point (normalized to the canvas), as on a press. */
   pulse(x: number, y: number): void;
+  /** Speeds the spin up for a press (see `addSpinBoost`). Does nothing under reduced motion. */
+  boost(): void;
   /** Stops the loop and removes every observer and listener. Safe to call twice. */
   destroy(): void;
 }
@@ -60,6 +90,12 @@ export interface MascotRenderer {
  * layout; its backing store tracks the device pixel ratio so glyphs stay crisp. Every glyph is
  * drawn once into an atlas and copied with `drawImage`, at whole device pixels and the atlas's own
  * size, so nothing is resampled and nothing blurs.
+ *
+ * Each `drawImage` has a fixed cost, so a run of identical glyphs side by side in a row is copied
+ * in one call, from a strip that holds the glyph repeated at the grid's spacing. That is only done
+ * for glyphs whose ink is no wider than the spacing: neighbors then never share a pixel, so one
+ * call paints exactly the pixels, in the same order, that one call per cell would. Wider glyphs
+ * (the dense blocks) overlap their neighbors and keep one call each.
  */
 export function startMascotRenderer(
   canvas: HTMLCanvasElement,
@@ -71,7 +107,7 @@ export function startMascotRenderer(
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     setState("unsupported");
-    return { setActive() {}, pulse() {}, destroy() {} };
+    return { setActive() {}, pulse() {}, boost() {}, destroy() {} };
   }
 
   const profile = deviceProfile();
@@ -93,10 +129,14 @@ export function startMascotRenderer(
   let turnedDegrees = NaN;
   // The spin's phase. It advances at the base speed and is eased into the angle the model shows.
   let spinPhase = REST_PHASE;
+  // Extra idle speeds from presses (0 at idle), and the speed last written to `data-spin`.
+  let spinBoost = 0;
+  let spinShown = "";
 
   // Grid, rebuilt on resize. Positions are in device pixels; u/v index the source; sx/sy place
   // the cell on the canvas (0–1) for the wave and the pointer distance.
   let cells = 0;
+  let perRow = 0;
   let cellU = new Float32Array(0);
   let cellV = new Float32Array(0);
   let cellSX = new Float32Array(0);
@@ -112,6 +152,19 @@ export function startMascotRenderer(
 
   let atlas: HTMLCanvasElement | null = null;
   let tile = 0;
+  // Per glyph, the first and last atlas-tile column with any ink, in any color (right < 0: none
+  // found, or the canvas can't be read back, so the glyph isn't batched).
+  let inkLeft = new Int32Array(GLYPHS.length);
+  let inkRight = new Int32Array(GLYPHS.length).fill(-1);
+
+  // Runs of cells are copied from `strips`: one row per atlas tile and, side by side, one region
+  // per column phase. Column gaps in device pixels repeat every `period` columns (1 at whole-pixel
+  // spacings, 2 at 7.5 px, and so on); `runOffsets[phase][j]` is the x of the jth cell of a run
+  // that starts at a column of that phase, relative to the first. Every draw comes from `strips`.
+  let strips: HTMLCanvasElement | null = null;
+  let stripWidth = 0;
+  let runOffsets: Int32Array[] = [];
+  let batchable = new Uint8Array(GLYPHS.length);
 
   const fontFamily = () =>
     getComputedStyle(canvas).getPropertyValue("--font-mono").trim() || "monospace";
@@ -138,6 +191,94 @@ export function startMascotRenderer(
       });
     });
     atlas = sheet;
+    measureInk(g, sheet.width, sheet.height);
+    buildStrips();
+  };
+
+  // Read once per atlas. The atlas is only a source for the strips, so the read-back never slows
+  // a frame.
+  const measureInk = (g: CanvasRenderingContext2D, width: number, height: number) => {
+    inkLeft = new Int32Array(GLYPHS.length).fill(tile);
+    inkRight = new Int32Array(GLYPHS.length).fill(-1);
+    let data: Uint8ClampedArray | undefined;
+    try {
+      data = g.getImageData(0, 0, width, height)?.data;
+    } catch {
+      data = undefined;
+    }
+    if (!data || data.length < width * height * 4) return;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] === 0) continue;
+        const glyph = Math.floor(x / tile);
+        const column = x - glyph * tile;
+        if (column < inkLeft[glyph]!) inkLeft[glyph] = column;
+        if (column > inkRight[glyph]!) inkRight[glyph] = column;
+      }
+    }
+  };
+
+  // Rebuilt with the atlas and on every layout, since the column gaps depend on both.
+  const buildStrips = () => {
+    strips = null;
+    if (!atlas || perRow === 0) return;
+    const gaps = new Int32Array(Math.max(0, perRow - 1));
+    for (let c = 0; c < gaps.length; c++) gaps[c] = cellX[c + 1]! - cellX[c]!;
+    let period = 0;
+    for (let p = 1; p <= MAX_PERIOD && period === 0 && gaps.length > 0; p++) {
+      let repeats = true;
+      for (let c = p; c < gaps.length && repeats; c++) repeats = gaps[c] === gaps[c % p];
+      if (repeats) period = p;
+    }
+    let minGap = Infinity;
+    for (let c = 0; c < Math.min(period, gaps.length); c++) minGap = Math.min(minGap, gaps[c]!);
+
+    runOffsets = [];
+    for (let phase = 0; phase < period; phase++) {
+      const offsets = new Int32Array(RUN);
+      for (let j = 1; j < RUN; j++) offsets[j] = offsets[j - 1]! + gaps[(phase + j - 1) % period]!;
+      runOffsets.push(offsets);
+    }
+    batchable = new Uint8Array(GLYPHS.length);
+    for (let glyph = 0; glyph < GLYPHS.length; glyph++) {
+      const right = inkRight[glyph]!;
+      batchable[glyph] = period > 0 && right >= 0 && right - inkLeft[glyph]! + 1 <= minGap ? 1 : 0;
+    }
+    if (!batchable.includes(1)) runOffsets = [];
+
+    stripWidth = tile;
+    for (const offsets of runOffsets) stripWidth = Math.max(stripWidth, offsets[RUN - 1]! + tile);
+    const sheet = document.createElement("canvas");
+    sheet.width = stripWidth * Math.max(1, runOffsets.length);
+    sheet.height = tile * TILES;
+    const g = sheet.getContext("2d");
+    if (!g) return;
+    g.imageSmoothingEnabled = false;
+    for (let t = 0; t < TILES; t++) {
+      const sx = (t % GLYPHS.length) * tile;
+      const sy = Math.floor(t / GLYPHS.length) * tile;
+      if (!batchable[t % GLYPHS.length]) {
+        // Only the first copy, so a single cell's whole tile holds no neighbor's ink.
+        g.drawImage(atlas, sx, sy, tile, tile, 0, t * tile, tile, tile);
+        continue;
+      }
+      runOffsets.forEach((offsets, phase) => {
+        for (const offset of offsets) {
+          g.drawImage(
+            atlas!,
+            sx,
+            sy,
+            tile,
+            tile,
+            phase * stripWidth + offset,
+            t * tile,
+            tile,
+            tile,
+          );
+        }
+      });
+    }
+    strips = sheet;
   };
 
   const layout = () => {
@@ -155,6 +296,7 @@ export function startMascotRenderer(
     const left = (width - side) / 2;
     const top = (height - side) / 2;
     const per = Math.floor(side / step);
+    perRow = per;
     cells = per * per;
     cellU = new Float32Array(cells);
     cellV = new Float32Array(cells);
@@ -183,6 +325,8 @@ export function startMascotRenderer(
     if (nextFont !== fontPx || !atlas) {
       fontPx = nextFont;
       buildAtlas();
+    } else {
+      buildStrips();
     }
     return true;
   };
@@ -206,7 +350,7 @@ export function startMascotRenderer(
 
   const draw = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!frames || !atlas || cells === 0) return;
+    if (!frames || !strips || cells === 0) return;
     const raster = currentRaster(frames);
     const shiftX = (motion.pointerX - 0.5) * 2 * PARALLAX;
     const shiftY = (motion.pointerY - 0.5) * 2 * PARALLAX;
@@ -241,12 +385,34 @@ export function startMascotRenderer(
     for (let l = 0; l < ALPHA_LEVELS; l++) {
       if (counts[l] === 0) continue;
       ctx.globalAlpha = (l + 1) / ALPHA_LEVELS;
-      for (let k = starts[l]!; k < ends[l]!; k++) {
+      for (let k = starts[l]!; k < ends[l]!;) {
         const i = order[k]!;
         const t = cellTile[i]!;
-        const sx = (t % GLYPHS.length) * tile;
-        const sy = Math.floor(t / GLYPHS.length) * tile;
-        ctx.drawImage(atlas, sx, sy, tile, tile, cellX[i]! - half, cellY[i]! - half, tile, tile);
+        const glyph = t % GLYPHS.length;
+        let run = 1;
+        let sx = 0;
+        let width = tile;
+        if (batchable[glyph]) {
+          // Same row, same opacity batch (the next entry in `order` is the next cell), same tile.
+          const col = i % perRow;
+          while (
+            run < RUN &&
+            col + run < perRow &&
+            k + run < ends[l]! &&
+            order[k + run] === i + run &&
+            cellTile[i + run] === t
+          ) {
+            run++;
+          }
+          const phase = col % runOffsets.length;
+          sx = phase * stripWidth;
+          // Up to the last copy's ink, which stops short of the next copy's.
+          width = runOffsets[phase]![run - 1]! + inkRight[glyph]! + 1;
+        }
+        const x = cellX[i]! - half;
+        const y = cellY[i]! - half;
+        ctx.drawImage(strips, sx, t * tile, width, tile, x, y, width, tile);
+        k += run;
       }
     }
     ctx.globalAlpha = 1;
@@ -266,9 +432,22 @@ export function startMascotRenderer(
     const seconds = lastTick === 0 ? 1 / profile.fps : Math.min(0.1, (now - lastTick) / 1000);
     lastTick = now;
     motion = stepMotion(motion, targetX, targetY, seconds);
-    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED) % (2 * Math.PI);
+    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED * (1 + spinBoost)) % (2 * Math.PI);
+    if (spinBoost > 0) {
+      spinBoost = decaySpinBoost(spinBoost, seconds);
+      showSpin();
+    }
     draw();
   };
+
+  // The spin's speed as a multiple of idle, to one decimal, for tests and debugging.
+  const showSpin = () => {
+    const shown = (1 + spinBoost).toFixed(1);
+    if (shown === spinShown) return;
+    spinShown = shown;
+    canvas.dataset.spin = shown;
+  };
+  showSpin();
 
   // Starts or stops the loop to match the current conditions.
   const sync = () => {
@@ -373,6 +552,11 @@ export function startMascotRenderer(
       motion = { ...motion, energy: 1 };
       targetX = x;
       targetY = y;
+    },
+    boost() {
+      if (disposed || reducedMotion) return;
+      spinBoost = addSpinBoost(spinBoost);
+      showSpin();
     },
     destroy() {
       if (disposed) return;

@@ -317,4 +317,48 @@ test.describe("the spinning mascot on the home page", () => {
       expect(violations.map((v) => `${v.impact} ${v.id}: ${v.help}`)).toEqual([]);
     });
   }
+
+  test("copies runs of identical neighboring glyphs with one drawImage each", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "The home page mounts the mascot only at xl and above");
+    // Counts every drawImage into an on-page canvas (the strips are built off-page). A run is a
+    // copy wider than it is tall: a glyph tile is square, and a run spans several cells.
+    await page.addInitScript(() => {
+      const draw = CanvasRenderingContext2D.prototype.drawImage;
+      const counts = { all: 0, runs: 0 };
+      (window as unknown as { mascotDraws: typeof counts }).mascotDraws = counts;
+      CanvasRenderingContext2D.prototype.drawImage = function (
+        this: CanvasRenderingContext2D,
+        ...args: unknown[]
+      ) {
+        if ((this.canvas as HTMLCanvasElement).isConnected) {
+          counts.all++;
+          if (args.length === 9 && Number(args[3]) > Number(args[4])) counts.runs++;
+        }
+        return (draw as (...a: unknown[]) => void).apply(this, args);
+      };
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await expect(canvas(page)).toHaveAttribute("data-state", "running");
+    const { all, runs, frames } = await canvas(page).evaluate(async (c: HTMLCanvasElement) => {
+      const counts = (window as unknown as { mascotDraws: { all: number; runs: number } })
+        .mascotDraws;
+      const [all0, runs0, frames0] = [counts.all, counts.runs, Number(c.dataset.frames ?? 0)];
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return {
+        all: counts.all - all0,
+        runs: counts.runs - runs0,
+        frames: Number(c.dataset.frames ?? 0) - frames0,
+      };
+    });
+    expect(frames).toBeGreaterThan(0);
+    // Measured in the first second of the spin at 1440×900 (#112): about 1,930 calls a frame with
+    // one call per cell, about 1,060 with runs batched, 30% of them runs. Either check fails if
+    // batching silently falls back to one call per cell (if the ink can't be measured, say).
+    expect(runs / all).toBeGreaterThan(0.2);
+    expect(all / frames).toBeLessThan(1500);
+  });
 });
