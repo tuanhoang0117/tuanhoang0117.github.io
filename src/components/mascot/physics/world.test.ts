@@ -1,6 +1,13 @@
 import Matter from "matter-js";
 import { describe, expect, it } from "vitest";
-import { createTokenWorld, FADE_MS, REST_BEFORE_FADE_MS, WALL_THICKNESS } from "./world";
+import {
+  createTokenWorld,
+  FADE_MS,
+  FLING_MAX_SPEED,
+  FLING_MIN_SPEED,
+  REST_BEFORE_FADE_MS,
+  WALL_THICKNESS,
+} from "./world";
 
 const W = 800;
 const H = 600;
@@ -118,6 +125,95 @@ describe("createTokenWorld", () => {
     world.destroy();
     expect(Matter.Composite.allBodies(world.engine.world)).toHaveLength(0);
     expect(world.tokens).toHaveLength(0);
+  });
+});
+
+describe("flingFrom", () => {
+  const speedOf = (v: Matter.Vector) => Math.hypot(v.x, v.y);
+
+  it("launches each token from the point, at a speed in range, in any direction", () => {
+    const world = createTokenWorld({
+      width: W,
+      height: H,
+      radius: R,
+      maxBodies: 400,
+      random: seeded(11),
+    });
+    const quadrants = [0, 0, 0, 0];
+    for (let i = 0; i < 400; i++) {
+      const token = world.flingFrom(400, 300);
+      expect(token.position).toEqual({ x: 400, y: 300 });
+      const v = Matter.Body.getVelocity(token);
+      expect(speedOf(v)).toBeGreaterThanOrEqual(FLING_MIN_SPEED - 1e-9);
+      expect(speedOf(v)).toBeLessThanOrEqual(FLING_MAX_SPEED + 1e-9);
+      quadrants[(v.x >= 0 ? 0 : 1) + (v.y >= 0 ? 0 : 2)]!++;
+    }
+    expect(world.tokens).toHaveLength(400);
+    // An arc in a random direction, not a drop's small upward toss: every quadrant, down included,
+    // gets a fair share.
+    for (const count of quadrants) expect(count).toBeGreaterThan(400 * 0.18);
+  });
+
+  it("a flung token moves away from where it was flung, along its launch direction", () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const world = createTokenWorld({ width: W, height: H, radius: R, random: seeded(seed) });
+      const token = world.flingFrom(400, 300);
+      const launch = Matter.Body.getVelocity(token);
+      let distance = 0;
+      for (let step = 0; step < 12; step++) {
+        world.step(1000 / 60);
+        const dx = token.position.x - 400;
+        const dy = token.position.y - 300;
+        const next = Math.hypot(dx, dy);
+        expect(next, `seed ${seed}, step ${step}`).toBeGreaterThan(distance);
+        // Gravity bends the path, but it still heads out the way it was launched.
+        expect(dx * launch.x + dy * launch.y, `seed ${seed}, step ${step}`).toBeGreaterThan(0);
+        distance = next;
+      }
+      // A fifth of a second in, it is well away from the center: at least the slowest launch's
+      // reach, less a little for air drag.
+      expect(distance, `seed ${seed}`).toBeGreaterThan(FLING_MIN_SPEED * 12 * 0.8);
+      world.destroy();
+    }
+  });
+
+  it("shares the token cap with dropped tokens, removing the oldest first", () => {
+    const world = createTokenWorld({
+      width: W,
+      height: H,
+      radius: R,
+      maxBodies: 3,
+      random: seeded(),
+    });
+    const added = [
+      world.spawnAt(100, 100),
+      world.flingFrom(200, 100),
+      world.spawnAt(300, 100),
+      world.flingFrom(400, 100),
+      world.flingFrom(500, 100),
+    ];
+    expect(world.tokens).toEqual(added.slice(2));
+    expect(dynamicBodies(world).map((b) => b.id)).toEqual(added.slice(2).map((b) => b.id));
+  });
+
+  it("a token flung upward bounces off a page body above it, then falls to the floor", () => {
+    // 0.75 of a turn from +x is straight up, the screen's y running down.
+    const world = createTokenWorld({ width: W, height: H, radius: R, random: () => 0.75 });
+    const ceiling = { x: 200, y: 300, width: 300, height: 40 };
+    world.setColliders([ceiling]);
+    const token = world.flingFrom(350, 400);
+    expect(Matter.Body.getVelocity(token).y).toBeLessThan(-FLING_MIN_SPEED);
+    // Unblocked, this launch would carry it past the body's underside.
+    const rise = FLING_MIN_SPEED + 0.75 * (FLING_MAX_SPEED - FLING_MIN_SPEED);
+    expect(400 - R - (rise * rise) / (2 * 0.001 * (1000 / 60) ** 2)).toBeLessThan(ceiling.y + 40);
+
+    let highest = token.position.y;
+    for (let i = 0; i < 60 * 8; i++) {
+      world.step(1000 / 60);
+      highest = Math.min(highest, token.position.y);
+    }
+    expect(highest - R).toBeGreaterThanOrEqual(ceiling.y + ceiling.height - 1);
+    expect(token.position.y).toBeCloseTo(H - R, 0);
   });
 });
 

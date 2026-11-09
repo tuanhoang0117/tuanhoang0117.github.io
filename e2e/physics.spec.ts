@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { HOLD_DELAY_MS, HOLD_RATE_PER_SECOND } from "../src/components/mascot/physics/pressEmitter";
 import { tokenArt, tokenVisual } from "../src/components/mascot/physics/tokenVisual";
+import { mascotCounterLabel, mascotLabel } from "../src/content/mascot";
 
 const TOKEN = tokenArt(tokenVisual).radius * 2; // CSS px
 const REST_TIMEOUT = 20_000;
@@ -272,5 +273,207 @@ test.describe("/lab/physics", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBe(0);
+  });
+});
+
+const mustang = (page: Page) => page.getByRole("button", { name: mascotLabel, exact: true });
+const mustangCanvas = (page: Page) => mustang(page).locator("canvas");
+const mustangCounter = (page: Page) =>
+  page.getByRole("group", { name: mascotLabel }).locator("[data-mascot-counter]");
+
+type Point = { x: number; y: number };
+
+/** Waits for the entrances to finish, so the mustang is measured where it will stay. */
+async function settleEntrances(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).length,
+      ),
+    )
+    .toBe(0);
+}
+
+/**
+ * Loads the home page with the mustang settled and focused, and returns its center. Focusing can
+ * scroll it into view, so it comes before measuring.
+ */
+async function homeMustang(page: Page): Promise<Point> {
+  await page.goto("/");
+  await expect(mustangCanvas(page)).toHaveAttribute("data-state", "running");
+  await mustang(page).focus();
+  await settleEntrances(page);
+  const box = (await mustang(page).boundingBox())!;
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/**
+ * From the moment the first token is drawn (the press draws it at once, before it moves), the
+ * center of the overlay's paint on that frame and the next 30, in CSS px.
+ */
+function trackFirstToken(page: Page) {
+  return overlay(page).evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d")!;
+    const samples: Point[] = [];
+    (window as unknown as { __token: Point[] }).__token = samples;
+    const record = () => {
+      const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const scale = canvas.width / canvas.clientWidth;
+      let [sumX, sumY, n] = [0, 0, 0];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (data[(y * width + x) * 4 + 3] === 0) continue;
+          sumX += x;
+          sumY += y;
+          n++;
+        }
+      }
+      if (n > 0) samples.push({ x: sumX / n / scale, y: sumY / n / scale });
+    };
+    const observer = new MutationObserver(() => {
+      if (canvas.dataset.tokens !== "1") return;
+      observer.disconnect();
+      record();
+      const next = () => {
+        record();
+        if (samples.length < 31) requestAnimationFrame(next);
+      };
+      requestAnimationFrame(next);
+    });
+    observer.observe(canvas, { attributes: true, attributeFilter: ["data-tokens"] });
+  });
+}
+
+async function trackedToken(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __token: Point[] }).__token.length))
+    .toBeGreaterThanOrEqual(31);
+  return page.evaluate(() => (window as unknown as { __token: Point[] }).__token);
+}
+
+/** Every value `data-spin` takes on the mustang's canvas, timed on the page's clock from now. */
+function recordSpin(page: Page) {
+  return mustangCanvas(page).evaluate((c: HTMLCanvasElement) => {
+    const start = performance.now();
+    const log = [{ ms: 0, spin: Number(c.dataset.spin) }];
+    (window as unknown as { __spin: typeof log }).__spin = log;
+    new MutationObserver(() =>
+      log.push({ ms: performance.now() - start, spin: Number(c.dataset.spin) }),
+    ).observe(c, { attributes: true, attributeFilter: ["data-spin"] });
+  });
+}
+
+const spinLog = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __spin: { ms: number; spin: number }[] }).__spin);
+
+const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/**
+ * Presses the mustang once: a real click at `at` (its center by default), or Enter or Space on the
+ * focused mustang.
+ */
+async function pressMustang(page: Page, input: "click" | "Enter" | "Space", at?: Point) {
+  if (input !== "click") {
+    await expect(mustang(page)).toBeFocused();
+    return page.keyboard.press(input === "Enter" ? "Enter" : " ");
+  }
+  const box = (await mustang(page).boundingBox())!;
+  const point = at ?? { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  return page.mouse.click(point.x, point.y);
+}
+
+test.describe("pressing the home page's mustang", () => {
+  test.skip(({ isMobile }) => isMobile, "The home page mounts the mustang only at xl and above");
+
+  for (const input of ["click", "Enter", "Space"] as const) {
+    test(`${input} flings a token out of the head's center`, async ({ page }) => {
+      // Every random draw is 0.5, so the fling is fixed: half a turn from +x, straight left.
+      // A drop would toss it neither left nor right (-3 + 6 × 0.5 = 0).
+      await page.addInitScript(() => {
+        Math.random = () => 0.5;
+      });
+      const center = await homeMustang(page);
+      await trackFirstToken(page);
+      const box = (await mustang(page).boundingBox())!;
+      // Off-center, so a token dropped at the pointer would start far from the head's center.
+      const pointer = { x: box.x + box.width * 0.8, y: box.y + box.height * 0.2 };
+      expect(distance(pointer, center)).toBeGreaterThan(100);
+      await pressMustang(page, input, pointer);
+
+      const path = await trackedToken(page);
+      expect(distance(path[0]!, center), "drawn first at the head's center").toBeLessThan(3);
+      // It flies out along an arc: away from the center on every frame, mostly sideways at first.
+      for (let i = 1; i < path.length; i++) {
+        expect(
+          distance(path[i]!, center),
+          `frame ${i}: ${JSON.stringify(path[i])}`,
+        ).toBeGreaterThanOrEqual(distance(path[i - 1]!, center) - 0.5);
+      }
+      const last = path.at(-1)!;
+      expect(center.x - last.x, "carried well to the left").toBeGreaterThan(60);
+      expect(center.x - last.x, "further across than down").toBeGreaterThan(last.y - center.y);
+      await expect(overlay(page)).toHaveAttribute("data-tokens", "1");
+    });
+  }
+
+  for (const input of ["click", "Enter", "Space"] as const) {
+    test(`${input} spins it about 4× faster, easing back to idle within 2 s`, async ({ page }) => {
+      await homeMustang(page);
+      await expect(mustangCanvas(page)).toHaveAttribute("data-spin", "1.0");
+      await recordSpin(page);
+      await pressMustang(page, input);
+      await expect(mustangCanvas(page)).toHaveAttribute("data-spin", "1.0", { timeout: 4000 });
+
+      const boosted = (await spinLog(page)).slice(1);
+      expect(boosted[0]!.spin, "a press boosts it at once").toBe(4);
+      for (let i = 1; i < boosted.length; i++) {
+        expect(boosted[i]!.spin, `step ${i}`).toBeLessThanOrEqual(boosted[i - 1]!.spin);
+      }
+      const back = boosted.at(-1)!.ms - boosted[0]!.ms;
+      expect(back, "eased back to idle in 1 to 2 s").toBeGreaterThan(1000);
+      // A little over 2 s for a busy runner's late frames.
+      expect(back).toBeLessThan(2250);
+      // Eased, not stepped: it passed through the speeds in between.
+      expect(boosted.filter(({ spin }) => spin > 1 && spin < 4).length).toBeGreaterThan(10);
+    });
+  }
+
+  test("rapid clicks stack up to 8× idle, and it keeps a steady frame rate", async ({ page }) => {
+    const center = await homeMustang(page);
+    await recordSpin(page);
+    for (let i = 0; i < 6; i++) await page.mouse.click(center.x, center.y);
+    const perSecond = await mustangCanvas(page).evaluate(async (c: HTMLCanvasElement) => {
+      const frames0 = Number(c.dataset.frames ?? 0);
+      const t0 = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return ((Number(c.dataset.frames ?? 0) - frames0) * 1000) / (performance.now() - t0);
+    });
+    await expect(mustangCanvas(page)).toHaveAttribute("data-spin", "1.0", { timeout: 4000 });
+
+    const speeds = (await spinLog(page)).map(({ spin }) => spin);
+    expect(Math.max(...speeds), "stacked to the cap, and no further").toBe(8);
+    // The same budget as the idle spin's frame-rate tests: 20 frames a second on a busy runner.
+    expect(perSecond).toBeGreaterThanOrEqual(20);
+    // Flinging changes only where a token starts: every press still counts, and every token still
+    // lands and comes to rest. (The e2e build's counter service is unreachable, so it counts here.)
+    await expect(mustangCounter(page)).toHaveText(`${mascotCounterLabel}: 6`);
+    await expect(overlay(page)).toHaveAttribute("data-tokens", "6");
+    await expect(overlay(page)).toHaveAttribute("data-resting", "true", { timeout: REST_TIMEOUT });
+  });
+
+  test("under reduced motion, presses don't speed it up and drop no tokens", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await expect(mustangCanvas(page)).toHaveAttribute("data-state", "static");
+    await mustang(page).focus();
+    for (const input of ["click", "Enter", "Space"] as const) await pressMustang(page, input);
+    await page.waitForTimeout(300);
+    await expect(mustangCanvas(page)).toHaveAttribute("data-spin", "1.0");
+    await expect(mustangCanvas(page)).toHaveAttribute("data-angle", "20");
+    await expect(overlay(page)).toHaveCount(0);
   });
 });

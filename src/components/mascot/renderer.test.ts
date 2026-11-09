@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { startMascotRenderer, type MascotRenderer } from "./renderer";
+import {
+  addSpinBoost,
+  decaySpinBoost,
+  SPIN_BOOST,
+  SPIN_BOOST_MAX,
+  startMascotRenderer,
+  type MascotRenderer,
+} from "./renderer";
 import { FILL_RAMP, OUTLINE_RAMP } from "./sampling";
 import { installMascotTestEnv, type MascotTestEnv } from "./testEnv";
 import * as source from "./source";
-import { createRaster } from "./voxel";
+import { createRaster, easeTurn, REST_PHASE, SPIN_BASE_SPEED } from "./voxel";
 
 // The real frames, with the model's `turn` wrapped in a spy so tests can count the voxel renders.
 // With `fullBleed` set, a flat gray image that fills the whole raster instead, so glyph runs reach
@@ -318,6 +325,147 @@ describe("startMascotRenderer", () => {
     expect(canvas.dataset.state).toBe("static");
     expect(canvas.dataset.angle).toBe("20");
     env.runFrame(1000);
+    expect(turn).not.toHaveBeenCalled();
+  });
+});
+
+/** The spin's speed after each of `frames` steps of `seconds`, as a multiple of idle. */
+const boostCurve = (boost: number, frames: number, seconds = 1 / 60) => {
+  const speeds: number[] = [];
+  for (let frame = 0; frame < frames; frame++) {
+    boost = decaySpinBoost(boost, seconds);
+    speeds.push(1 + boost);
+  }
+  return speeds;
+};
+
+describe("spin boost", () => {
+  it("one press spins about 4× idle", () => {
+    expect(1 + addSpinBoost(0)).toBe(4);
+  });
+
+  it("rapid presses stack, up to the cap", () => {
+    let boost = 0;
+    const speeds: number[] = [];
+    for (let press = 0; press < 6; press++) speeds.push(1 + (boost = addSpinBoost(boost)));
+    expect(speeds[1]).toBe(1 + 2 * SPIN_BOOST);
+    expect(Math.max(...speeds)).toBe(SPIN_BOOST_MAX);
+    expect(speeds.at(-1)).toBe(SPIN_BOOST_MAX);
+    // A press while the boost is easing out adds on top of what's left.
+    const eased = decaySpinBoost(addSpinBoost(0), 0.5);
+    expect(addSpinBoost(eased)).toBeCloseTo(eased + SPIN_BOOST, 9);
+  });
+
+  it.each([
+    ["one press", addSpinBoost(0)],
+    ["the cap", SPIN_BOOST_MAX - 1],
+  ])("eases back to idle from %s within 1 to 2 s, never speeding up on the way", (_, boost) => {
+    const speeds = boostCurve(boost, 3 * 60);
+    for (let frame = 1; frame < speeds.length; frame++) {
+      expect(speeds[frame], `frame ${frame}`).toBeLessThanOrEqual(speeds[frame - 1]!);
+    }
+    const idleFrom = speeds.indexOf(1);
+    // Still clearly boosted after a second, and fully back to idle before two.
+    expect(speeds[60 - 1]).toBeGreaterThan(1.1);
+    expect(idleFrom).toBeGreaterThan(60);
+    expect(idleFrom).toBeLessThan(2 * 60);
+    expect(speeds.slice(idleFrom).every((speed) => speed === 1)).toBe(true);
+    // It eases: most of the boost is gone in the first half second.
+    expect(speeds[30 - 1]! - 1).toBeLessThan(boost / 2);
+  });
+
+  it("eases at the same rate at 30 and 60 frames a second", () => {
+    const at60 = boostCurve(addSpinBoost(0), 60, 1 / 60).at(-1)!;
+    const at30 = boostCurve(addSpinBoost(0), 30, 1 / 30).at(-1)!;
+    expect(at30).toBeCloseTo(at60, 9);
+  });
+});
+
+describe("startMascotRenderer's spin boost", () => {
+  beforeEach(() => {
+    env = installMascotTestEnv({ size: 400 });
+    turn.mockClear();
+  });
+  afterEach(() => {
+    renderer?.destroy();
+    renderer = null;
+    canvas.remove();
+    env.restore();
+    fullBleed = false;
+  });
+
+  /** What `data-angle` shows after each 60 fps frame, for a spin boosted by `presses` at the start. */
+  const expectedAngles = (presses: number, frames: number) => {
+    let phase = REST_PHASE;
+    let boost = 0;
+    for (let press = 0; press < presses; press++) boost = addSpinBoost(boost);
+    const angles: string[] = [];
+    for (let frame = 0; frame < frames; frame++) {
+      const seconds = 1 / 60;
+      phase = (phase + seconds * SPIN_BASE_SPEED * (1 + boost)) % (2 * Math.PI);
+      boost = decaySpinBoost(boost, seconds);
+      angles.push(String(Math.round((easeTurn(phase) * 180) / Math.PI) % 360));
+    }
+    return angles;
+  };
+
+  const runAngles = (frames: number) => {
+    const angles: string[] = [];
+    const speeds: string[] = [];
+    for (let frame = 0; frame < frames; frame++) {
+      env.runFrame(1000 / 60);
+      angles.push(canvas.dataset.angle!);
+      speeds.push(canvas.dataset.spin!);
+    }
+    return { angles, speeds };
+  };
+
+  it("turns the model faster after a press, then eases back to the idle speed", async () => {
+    await start();
+    expect(canvas.dataset.spin).toBe("1.0");
+    renderer!.boost();
+    expect(canvas.dataset.spin).toBe("4.0");
+
+    const { angles, speeds } = runAngles(150);
+    // Frame by frame, exactly the boosted spin, eased out.
+    expect(angles).toEqual(expectedAngles(1, 150));
+    expect(angles).not.toEqual(expectedAngles(0, 150));
+    expect(Number(speeds[0])).toBeGreaterThan(3.8);
+    expect(speeds.at(-1)).toBe("1.0");
+    // Half a second in, it has turned well over twice as far as an idle spin would have.
+    const idle = expectedAngles(0, 30);
+    expect(Number(angles[29]) - 20).toBeGreaterThan((Number(idle[29]) - 20) * 2);
+  });
+
+  it("stacks presses up to the cap", async () => {
+    await start();
+    for (let press = 0; press < 5; press++) renderer!.boost();
+    expect(canvas.dataset.spin).toBe(SPIN_BOOST_MAX.toFixed(1));
+    const { angles } = runAngles(60);
+    expect(angles).toEqual(expectedAngles(5, 60));
+  });
+
+  it("turns the model to whole degrees while boosted, as at idle, once per new degree", async () => {
+    await start();
+    renderer!.boost();
+    let angle = canvas.dataset.angle;
+    for (let frame = 0; frame < 20; frame++) {
+      const calls = turn.mock.calls.length;
+      env.runFrame(1000 / 60);
+      const next = canvas.dataset.angle;
+      expect(turn.mock.calls.length - calls, `frame ${frame}`).toBe(next === angle ? 0 : 1);
+      expect(lastTurn(), `frame ${frame}`).toBeCloseTo(Number(next), 9);
+      angle = next;
+    }
+  });
+
+  it("with reduced motion, a press doesn't speed anything up", async () => {
+    await start(true);
+    renderer!.boost();
+    expect(canvas.dataset.spin).toBe("1.0");
+    env.runFrame(1000);
+    expect(canvas.dataset.angle).toBe("20");
+    expect(env.pendingFrames()).toBe(0);
     expect(turn).not.toHaveBeenCalled();
   });
 });

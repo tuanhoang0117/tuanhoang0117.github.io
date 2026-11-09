@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mascotLabel } from "../../content/mascot";
 import { Mascot, PRESS_MS } from "./Mascot";
+import { SPIN_BOOST_MAX } from "./renderer";
 import { installMascotTestEnv, preferReducedMotion, type MascotTestEnv } from "./testEnv";
 
 let env: MascotTestEnv;
@@ -139,6 +140,32 @@ describe("Mascot", () => {
     expect(mascot()).toHaveAttribute("data-pressed");
   });
 
+  it.each([
+    ["a click", () => fireEvent.click(mascot(), { detail: 1, clientX: 120, clientY: 80 })],
+    ["Enter", () => userEvent.keyboard("{Enter}")],
+    ["Space", () => userEvent.keyboard(" ")],
+  ])("%s boosts the spin, and presses stack to the cap", async (_, press) => {
+    render(<Mascot />);
+    await settle();
+    mascot().focus();
+    expect(canvas().dataset.spin).toBe("1.0");
+    await act(async () => press());
+    expect(canvas().dataset.spin).toBe("4.0");
+    for (let i = 0; i < 4; i++) await act(async () => press());
+    expect(canvas().dataset.spin).toBe(SPIN_BOOST_MAX.toFixed(1));
+    // And it eases back to idle.
+    act(() => {
+      for (let frame = 0; frame < 2 * 60; frame++) env.runFrame(1000 / 60);
+    });
+    expect(canvas().dataset.spin).toBe("1.0");
+  });
+
+  it("marks itself as where pressed tokens launch from", async () => {
+    render(<Mascot />);
+    await settle();
+    expect(mascot()).toHaveAttribute("data-token-launcher");
+  });
+
   it("pauses when scrolled off-screen and resumes when back", async () => {
     render(<Mascot />);
     await settle();
@@ -237,6 +264,20 @@ describe("Mascot with reduced motion", () => {
 
     expect(onActivate).toHaveBeenCalledTimes(2);
     expect(onActivate.mock.calls.map(([a]) => a.input)).toEqual(["pointer", "keyboard"]);
+    expect(env.pendingFrames()).toBe(0);
+  });
+
+  it("never boosts the spin on click or keyboard", async () => {
+    const user = userEvent.setup();
+    render(<Mascot />);
+    await settle();
+
+    await user.click(mascot());
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+
+    expect(canvas().dataset.spin).toBe("1.0");
+    expect(canvas().dataset.angle).toBe("20");
     expect(env.pendingFrames()).toBe(0);
   });
 });

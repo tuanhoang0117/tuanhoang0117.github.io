@@ -37,6 +37,29 @@ function deviceProfile() {
   return low ? { fps: 30, maxDpr: 1.5 } : { fps: 60, maxDpr: 3 };
 }
 
+/** The extra idle speeds one press adds to the spin, so a single press spins about 4× idle. */
+export const SPIN_BOOST = 3;
+/** Rapid presses stack, but the spin never goes faster than this many times idle. */
+export const SPIN_BOOST_MAX = 8;
+/** The boost eases out exponentially, falling to 1/e of itself every this many seconds. */
+export const SPIN_BOOST_SECONDS = 0.45;
+/**
+ * Below this many extra idle speeds the boost snaps to none. With the time constant above, one
+ * press is back to idle about 1.5 s later, and a boost at the cap about 1.9 s later.
+ */
+export const SPIN_BOOST_REST = 0.1;
+
+/** The boost after one more press: `SPIN_BOOST` more, up to the cap. */
+export function addSpinBoost(boost: number): number {
+  return Math.min(boost + SPIN_BOOST, SPIN_BOOST_MAX - 1);
+}
+
+/** The boost `seconds` later. It eases toward none, fastest at first, and then stops at none. */
+export function decaySpinBoost(boost: number, seconds: number): number {
+  const next = boost * Math.exp(-seconds / SPIN_BOOST_SECONDS);
+  return next < SPIN_BOOST_REST ? 0 : next;
+}
+
 /** An angle in radians as whole degrees (0–359): what `data-angle` shows and the model turns to. */
 const wholeDegrees = (radians: number) => Math.round((radians * 180) / Math.PI) % 360;
 
@@ -56,6 +79,8 @@ export interface MascotRenderer {
   setActive(active: boolean): void;
   /** Sends a ripple out from a point (normalized to the canvas), as on a press. */
   pulse(x: number, y: number): void;
+  /** Speeds the spin up for a press (see `addSpinBoost`). Does nothing under reduced motion. */
+  boost(): void;
   /** Stops the loop and removes every observer and listener. Safe to call twice. */
   destroy(): void;
 }
@@ -82,7 +107,7 @@ export function startMascotRenderer(
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     setState("unsupported");
-    return { setActive() {}, pulse() {}, destroy() {} };
+    return { setActive() {}, pulse() {}, boost() {}, destroy() {} };
   }
 
   const profile = deviceProfile();
@@ -104,6 +129,9 @@ export function startMascotRenderer(
   let turnedDegrees = NaN;
   // The spin's phase. It advances at the base speed and is eased into the angle the model shows.
   let spinPhase = REST_PHASE;
+  // Extra idle speeds from presses (0 at idle), and the speed last written to `data-spin`.
+  let spinBoost = 0;
+  let spinShown = "";
 
   // Grid, rebuilt on resize. Positions are in device pixels; u/v index the source; sx/sy place
   // the cell on the canvas (0–1) for the wave and the pointer distance.
@@ -404,9 +432,22 @@ export function startMascotRenderer(
     const seconds = lastTick === 0 ? 1 / profile.fps : Math.min(0.1, (now - lastTick) / 1000);
     lastTick = now;
     motion = stepMotion(motion, targetX, targetY, seconds);
-    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED) % (2 * Math.PI);
+    spinPhase = (spinPhase + seconds * SPIN_BASE_SPEED * (1 + spinBoost)) % (2 * Math.PI);
+    if (spinBoost > 0) {
+      spinBoost = decaySpinBoost(spinBoost, seconds);
+      showSpin();
+    }
     draw();
   };
+
+  // The spin's speed as a multiple of idle, to one decimal, for tests and debugging.
+  const showSpin = () => {
+    const shown = (1 + spinBoost).toFixed(1);
+    if (shown === spinShown) return;
+    spinShown = shown;
+    canvas.dataset.spin = shown;
+  };
+  showSpin();
 
   // Starts or stops the loop to match the current conditions.
   const sync = () => {
@@ -511,6 +552,11 @@ export function startMascotRenderer(
       motion = { ...motion, energy: 1 };
       targetX = x;
       targetY = y;
+    },
+    boost() {
+      if (disposed || reducedMotion) return;
+      spinBoost = addSpinBoost(spinBoost);
+      showSpin();
     },
     destroy() {
       if (disposed) return;

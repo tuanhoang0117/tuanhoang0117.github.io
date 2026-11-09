@@ -25,7 +25,9 @@ interface MascotProps {
 /**
  * The interactive glyph mascot: a square button that fills its container's width. Click, tap,
  * Enter, or Space presses it and calls `onActivate`. The canvas inside is decorative; the button
- * carries the accessible name from `mascotLabel`.
+ * carries the accessible name from `mascotLabel`. Each press boosts the spin, and
+ * `data-token-launcher` tells the physics overlay to fling a press's token out of the head's center
+ * instead of dropping it where the pointer was.
  */
 export function Mascot({ onActivate, source = mascotVisual, className = "" }: MascotProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -73,6 +75,7 @@ export function Mascot({ onActivate, source = mascotVisual, className = "" }: Ma
     if (rect.width > 0 && rect.height > 0) {
       rendererRef.current?.pulse((x - rect.left) / rect.width, (y - rect.top) / rect.height);
     }
+    rendererRef.current?.boost();
     onActivate?.({ x, y, input: keyboard ? "keyboard" : "pointer" });
   };
 
@@ -83,6 +86,7 @@ export function Mascot({ onActivate, source = mascotVisual, className = "" }: Ma
       aria-label={mascotLabel}
       onClick={activate}
       data-pressed={pressed ? "" : undefined}
+      data-token-launcher=""
       className={`block aspect-square w-full cursor-pointer touch-manipulation transition-transform duration-75 select-none active:scale-95 data-pressed:scale-95 ${className}`}
     >
       <canvas ref={canvasRef} aria-hidden="true" className="pixelated block size-full" />
