@@ -339,7 +339,9 @@ export function renderVoxels(model: VoxelModel, angle: number, target: Raster, s
       let vx = mx * cos - mz * sin;
       let vy = -RELIEF * gy;
       let vz = mx * sin + mz * cos;
-      // Math.sqrt rather than Math.hypot: the same result here, and far cheaper per pixel.
+      // Math.sqrt rather than Math.hypot: far cheaper per pixel. The two often differ in the
+      // float's last bit, but in every render compared in #109 the gray byte this feeds came out
+      // the same; the golden hash in voxel.test.ts pins that for all 360 whole degrees.
       const len = Math.sqrt(vx * vx + vy * vy + vz * vz);
       vx /= len;
       vy /= len;
