@@ -29,12 +29,16 @@ export const REDUCED_TRANSPARENCY_QUERY = "(prefers-reduced-transparency: reduce
 
 /**
  * The panel's frosted glass, the one exception to "no blur" (docs/design-system.md). Applied only
- * where backdrop-filter works; anywhere else the panel stays opaque paper. The tint keeps ink
- * links above 7:1 even over solid ink, and the page behind is dimmed besides.
+ * where backdrop-filter works; anywhere else the panel stays opaque paper. From sm up the tint is
+ * thin so the page shows through, and the heavy blur keeps links readable by smoothing the page
+ * into soft color. Phones keep a thick tint: headless Chromium drops backdrop blur above 1x pixel
+ * density, so CI can only prove phone contrast from the tint alone. e2e/menu.spec.ts measures
+ * every link against the real pixels on each page.
  */
 export const MENU_GLASS = [
   "supports-backdrop-filter:bg-card/70",
-  "supports-backdrop-filter:backdrop-blur-xl",
+  "supports-backdrop-filter:sm:bg-card/40",
+  "supports-backdrop-filter:backdrop-blur-3xl",
   "supports-backdrop-filter:backdrop-saturate-150",
 ].join(" ");
 
@@ -211,7 +215,7 @@ export function Nav() {
             data-menu-backdrop=""
             onClick={close}
             className={[
-              "pointer-events-auto absolute inset-0 bg-ink/40 transition-all duration-550",
+              "pointer-events-auto absolute inset-0 bg-ink/10 transition-all duration-550",
               open ? "visible opacity-100 ease-out" : "invisible opacity-0 ease-in",
             ].join(" ")}
           />
