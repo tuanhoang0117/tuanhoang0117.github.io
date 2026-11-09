@@ -132,6 +132,55 @@ describe("HTTP client", () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(await pending).toEqual({ kind: "network" });
   });
+
+  it("counts a 200 whose body never finishes as no answer, once the timeout passes", async () => {
+    vi.useFakeTimers();
+    // Headers arrive at once; the body sends half a JSON object and then stalls forever.
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"count":'));
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    const client = createHttpCounterClient(URL_ROOT, { fetch, timeoutMs: 500 });
+    let settled = false;
+    const pending = failureOf(client.increment(2)).finally(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(499);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toEqual({ kind: "network" });
+  });
+
+  it("counts a body cut off partway as no answer, not a bad answer", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"count":'));
+              controller.error(new TypeError("connection reset"));
+            },
+          }),
+          { status: 200 },
+        ),
+    );
+    expect(await failureOf(createHttpCounterClient(URL_ROOT, { fetch }).increment(1))).toEqual({
+      kind: "network",
+    });
+  });
+
+  it("sends an increment with keepalive only when asked, so it can outlive the page", async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => json({ count: 3 }));
+    const client = createHttpCounterClient(URL_ROOT, { fetch });
+    await client.increment(1);
+    await client.increment(2, { keepalive: true });
+    expect(fetch.mock.calls.map(([, init]) => init?.keepalive)).toEqual([false, true]);
+  });
 });
 
 describe("parseRetryAfter", () => {

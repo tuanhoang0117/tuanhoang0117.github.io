@@ -68,8 +68,8 @@ menu, the banner covering content), so the checks stay but are sized to the risk
    own files unchanged can carry the verdicts forward (see "Carrying verdicts forward"): the lead
    checks it with `scripts/carry-forward.ts`, and the carry is posted only with Tuan's decision.
    Claude Code's permission guard refused the lead posting a pass on a commit no agent checked
-   (2026-10-28), so low-risk statuses come from Tuan's account, and so do carried ones unless the
-   script's `--post` is allowed to post them as the bot with Tuan's `--owner-ok`.
+   (2026-10-28), so low-risk statuses come from Tuan's account, and so do carried ones (Tuan's
+   decision, 2026-11-07).
 5. **A cheaper model for QA.** QA is mostly mechanical; it runs on a smaller model. Reviews keep
    the stronger one.
 6. **Split by risk, bundle the rest.** Put a risky piece (like the menu) in its own PR so its
@@ -167,27 +167,38 @@ since, the agents' verdicts can be copied to the new head instead of re-running 
   Nobody carries forward by default.
 - **Checks:** [`scripts/carry-forward.ts`](../scripts/carry-forward.ts) refuses unless the PR is
   open at the expected head; one older commit has the newest `agent/qa` and `agent/review` both
-  real agent verdicts, posted by `tuanhoang-bot` with a description starting `QA: PASS` or
-  `Review: APPROVE` (or `Review: APPROVE WITH SUGGESTIONS`); no commit since has a FAIL, BLOCK or
-  pending agent status; every file the PR changes, renamed files by their old name too, is
-  identical at both heads and untouched by `v2` in between; and CI on the new head has passed
-  (`--allow-pending-ci` lets running jobs through, never failed ones). Carried statuses, Tuan's
-  overrides and "No agent run" statuses never qualify, so carries never chain.
+  real agent verdicts (both from that one commit); no commit since, the head included, has a
+  FAIL, BLOCK or pending agent status; every file the PR changes, renamed files by their old name
+  too, is identical at both heads and untouched by `v2` in between; and CI on the new head has
+  passed (`--allow-pending-ci` lets running jobs through, never failed or cancelled ones).
+- **Which verdicts count:** only ones `tuanhoang-bot` posted as `QA: PASS`, `Review: APPROVE` or
+  `Review: APPROVE WITH SUGGESTIONS`, either alone or followed by a note agents add:
+  `(combined medium-risk check)`, `(combined medium-tier agent, Claude <model>)` or `(<sha> only)`.
+  Anything else refuses, such as `QA: PASS but e2e failing`. Codex's `(OpenAI Codex, <model>)` and
+  ` — OpenAI Codex, <model>` refuse too (Tuan's decision, 2026-11-08), so Codex agents post the
+  plain verdict. A new agent wording refuses too until
+  it is added to the script. Carried statuses, Tuan's overrides and "No agent run" statuses never
+  qualify, so carries never chain.
+- **Tuan's decision (2026-11-07):** carries post from Tuan's own terminal with
+  `--print-owner-commands` by default. Both verdicts must come from one commit: a QA pass on one
+  commit and a review approval on another don't carry, because the two may never have seen the
+  same code. Commits Tuan passed by hand (overrides, "No agent run", his own carries) don't carry,
+  because the carry comment says the verdicts came from agents.
 - **Who posts:** the lead runs the script; agents are not re-run. A dry run is the default and
-  writes nothing: `node scripts/carry-forward.ts <N>`. Nothing is posted until Tuan decides, and
-  there are two ways to post:
-  - `--print-owner-commands --owner-ok "<his words and the date>"` runs the same checks, writes
-    nothing, and prints commands for Tuan to run in a normal terminal with his own `gh` login.
-    This is how Tuan posts from his account.
-  - `--post --owner-ok "<...>"` posts as the bot. It refuses without `--owner-ok` recording Tuan's
-    decision, and Claude Code's guard may refuse it anyway, since no agent checked the new head.
+  writes nothing: `node scripts/carry-forward.ts <N>`. Nothing is posted until Tuan decides. Then:
+  - **By default,** `--print-owner-commands --owner-ok "<his words and the date>"` runs the same
+    checks, writes nothing, and prints commands for Tuan to run in a normal terminal with his own
+    `gh` login.
+  - `--post --owner-ok "<...>"` posts as the bot instead, when Tuan chooses that for a PR. Claude
+    Code's guard may refuse it, since no agent checked the new head. If it does, the lead stops
+    and uses the owner commands instead of retrying.
 
   Either way, the post is a disclosure comment, then both statuses
   (`QA: PASS (carried forward from <old7>)`, `Review: APPROVE (carried forward from <old7>)`)
   linking to it. Right before writing, both re-read the PR and the head's agent statuses, and stop
-  if the PR closed, its head moved, or an agent posted anything but success on the head. The
-  printed commands stop at the first failed command; `--post` re-reads the statuses afterwards
-  and fails unless both are there with the comment's link.
+  if the PR closed, its head moved, or an agent posted anything but success on the head. Both
+  stop at the first failed write, then read the statuses back and exit non-zero unless both are
+  there with the comment's link.
 
 ### Known limitations
 
