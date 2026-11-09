@@ -13,7 +13,7 @@ value or arbitrary `[...]` value in a component is a review blocker.
 
 1. **The pixel is the unit.** Spacing, borders, and shadow offsets snap to Tailwind's 4px scale.
    No arbitrary spacing.
-2. **No blur, ever.** Shadows are solid offset blocks (`shadow-block-sm` / `shadow-block` /
+2. **No blur, with one exception.** Shadows are solid offset blocks (`shadow-block-sm` / `shadow-block` /
    `shadow-block-lg`). No `blur-*`, no soft `shadow-md`. Sprites render with `crispEdges`;
    raster pixel art uses `pixelated`. One exception (Tuan's decision, 2026-11-08, #83): the
    open menu panel is frosted glass (`backdrop-blur`, a `bg-card` tint, a bright edge). It applies
