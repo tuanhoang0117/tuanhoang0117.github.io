@@ -22,21 +22,34 @@ async function stubCounter(
   start: number,
   reply: (req: { method: string; by?: number; index: number }) => Reply = () => ({ status: 200 }),
 ) {
-  const server = { total: start, posts: [] as number[], accepted: [] as number[], reads: 0 };
+  const server = {
+    total: start,
+    posts: [] as number[],
+    /** When each POST arrived, in ms. */
+    postedAt: [] as number[],
+    accepted: [] as number[],
+    reads: 0,
+  };
   let index = 0;
   await page.route(`${STUB}/**`, async (route: Route) => {
     const request = route.request();
+    // The real Worker's CORS headers (worker/README.md), so the browser shows the page what it would
+    // in production, Retry-After included.
     const cors = {
       "Access-Control-Allow-Origin": (await request.headerValue("origin")) ?? "",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Expose-Headers": "Retry-After",
       Vary: "Origin",
     };
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     const by =
       request.method() === "POST" ? (request.postDataJSON() as { by: number }).by : undefined;
     if (by === undefined) server.reads += 1;
-    else server.posts.push(by);
+    else {
+      server.posts.push(by);
+      server.postedAt.push(Date.now());
+    }
     const answer = reply({ method: request.method(), by, index: index++ });
     if (answer === "abort") return route.abort("connectionrefused");
     if (answer.status === 200 && by !== undefined) {
@@ -108,7 +121,7 @@ test.describe("shared mascot counter", () => {
   test("waits out a 429's Retry-After, then counts the presses once", async ({ page }) => {
     const server = await stubCounter(page, 10, ({ method, index }) =>
       method === "POST" && index === 1
-        ? { status: 429, headers: { "Retry-After": "1" } }
+        ? { status: 429, headers: { "Retry-After": "2" } }
         : { status: 200 },
     );
     await page.goto("/");
@@ -116,8 +129,13 @@ test.describe("shared mascot counter", () => {
     for (let i = 0; i < 3; i++) await mascot(page).click();
     await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 13`);
 
-    await expect.poll(() => server.accepted).toEqual([3]);
+    await expect.poll(() => server.accepted, { timeout: 10_000 }).toEqual([3]);
     expect(server.posts).toEqual([3, 3]);
+    // The retry waits the 2 s the header asked for: not the 3 s used when the page can't read it,
+    // and not the 1 s floor.
+    const gap = server.postedAt[1]! - server.postedAt[0]!;
+    expect(gap, "ms between the 429 and the retry").toBeGreaterThanOrEqual(1900);
+    expect(gap, "ms between the 429 and the retry").toBeLessThan(2900);
     expect(server.total).toBe(13);
     await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 13`);
     await expect(counter(page)).toHaveAttribute("data-counter-mode", "shared");
@@ -139,6 +157,41 @@ test.describe("shared mascot counter", () => {
     await expect.poll(() => server.accepted).toEqual([1]);
     expect(server.posts).toEqual([2, 1]);
     await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 13`);
+  });
+
+  test("sends presses made just before a full navigation, once, with keepalive", async ({
+    page,
+  }) => {
+    // Playwright can't see or route a keepalive request sent while a page unloads, so this records
+    // each fetch the page makes in sessionStorage, which outlives the navigation in the same tab.
+    await page.addInitScript(() => {
+      const realFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const calls = JSON.parse(sessionStorage.getItem("counter-fetches") ?? "[]") as unknown[];
+        calls.push({ url: String(input), body: init?.body ?? null, keepalive: !!init?.keepalive });
+        sessionStorage.setItem("counter-fetches", JSON.stringify(calls));
+        return realFetch(input, init);
+      };
+    });
+    const server = await stubCounter(page, 20);
+    await page.goto("/");
+    await expect(counter(page)).toHaveText(`${mascotCounterLabel}: 20`);
+    await mascot(page).click();
+    await mascot(page).click();
+    // Leave inside the 1 s batch window, with a full page load, so React cleanup never runs.
+    await page.goto("/resume");
+    await page.waitForTimeout(1500);
+
+    const increments = (
+      JSON.parse(
+        (await page.evaluate(() => sessionStorage.getItem("counter-fetches"))) ?? "[]",
+      ) as { url: string; body: string | null; keepalive: boolean }[]
+    ).filter((call) => call.url.endsWith("/increment"));
+    expect(increments).toEqual([
+      { url: `${STUB}/increment`, body: JSON.stringify({ by: 2 }), keepalive: true },
+    ]);
+    // Nothing went out before the page left: the presses were still waiting for their batch.
+    expect(server.posts).toEqual([]);
   });
 
   test("falls back to local counting when the service is down", async ({ page }) => {
