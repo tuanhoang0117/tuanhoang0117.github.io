@@ -29,13 +29,15 @@ const COMPARE_FILE_LIMIT = 300;
 const BODY_DELIMITER = "CARRY_FORWARD_BODY";
 // Only verdicts the agents posted themselves can be carried: the bot account, with the exact
 // verdict the agent definitions publish (.claude/agents/qa.md, reviewer.md), alone or followed by
-// one of the notes agents have actually appended: a combined agent's "(combined ...)", the tool
-// "(OpenAI Codex, <model>)" or " — OpenAI Codex, <model>", or a re-check's "(<sha> only)". Anything
+// one of the notes agents have actually appended: a combined agent's "(combined medium-risk check)"
+// or "(combined medium-tier agent, Claude <model>)", or a re-check's "(<sha> only)". Codex's
+// "(OpenAI Codex, <model>)" and " — OpenAI Codex, <model>" are refused (Tuan's decision,
+// 2026-11-08): a free-text model name let "— OpenAI Codex, GPT-6 but e2e failing" through. Anything
 // else, such as "QA: PASS but e2e failing", Tuan's "Override by Tuan: ..." or "No agent run: ...",
 // or a status that was itself carried, is refused: an allow-list fails closed on wording nobody
 // listed. A new agent wording refuses until it is added here.
 export const BOT = "tuanhoang-bot";
-const NOTE = String.raw`(?: \((?:combined [^()]+|OpenAI Codex, [^()]+|[0-9a-f]{7,40} only)\)| — OpenAI Codex, [^()]+)?`;
+const NOTE = String.raw`(?: \((?:combined medium-risk check|combined medium-tier agent, Claude [A-Z][a-z]+ \d+(?:\.\d+)?|[0-9a-f]{7,40} only)\))?`;
 const VERDICT: Record<Context, RegExp> = {
   "agent/qa": new RegExp(String.raw`^QA: PASS${NOTE}$`),
   "agent/review": new RegExp(String.raw`^Review: APPROVE(?: WITH SUGGESTIONS)?${NOTE}$`),

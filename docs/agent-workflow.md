@@ -173,8 +173,10 @@ since, the agents' verdicts can be copied to the new head instead of re-running 
   passed (`--allow-pending-ci` lets running jobs through, never failed or cancelled ones).
 - **Which verdicts count:** only ones `tuanhoang-bot` posted as `QA: PASS`, `Review: APPROVE` or
   `Review: APPROVE WITH SUGGESTIONS`, either alone or followed by a note agents add:
-  `(combined ...)`, `(OpenAI Codex, <model>)`, ` — OpenAI Codex, <model>` or `(<sha> only)`.
-  Anything else refuses, such as `QA: PASS but e2e failing`. A new agent wording refuses too until
+  `(combined medium-risk check)`, `(combined medium-tier agent, Claude <model>)` or `(<sha> only)`.
+  Anything else refuses, such as `QA: PASS but e2e failing`. Codex's `(OpenAI Codex, <model>)` and
+  ` — OpenAI Codex, <model>` refuse too (Tuan's decision, 2026-11-08), so Codex agents post the
+  plain verdict. A new agent wording refuses too until
   it is added to the script. Carried statuses, Tuan's overrides and "No agent run" statuses never
   qualify, so carries never chain.
 - **Tuan's decision (2026-11-07):** carries post from Tuan's own terminal with

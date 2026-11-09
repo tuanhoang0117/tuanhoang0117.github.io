@@ -645,22 +645,20 @@ describe("carry-forward", () => {
     });
 
     // Every distinct success description tuanhoang-bot posted on agent/* across the 64 most recent
-    // PRs (collected 2026-11-07), minus the bot's own carries, which must never count.
+    // PRs (collected 2026-11-07), minus the bot's own carries, which must never count, and minus
+    // Codex's wordings, which Tuan dropped on 2026-11-08 (they're in the refused list below).
     const realAgentVerdicts: [Context, string][] = [
       ["agent/qa", "QA: PASS"],
       ["agent/qa", "QA: PASS (combined medium-risk check)"],
       ["agent/qa", "QA: PASS (combined medium-tier agent, Claude Opus 5.5)"],
-      ["agent/qa", "QA: PASS — OpenAI Codex, GPT-6"],
       ["agent/review", "Review: APPROVE"],
       ["agent/review", "Review: APPROVE WITH SUGGESTIONS"],
       ["agent/review", "Review: APPROVE WITH SUGGESTIONS (6bb857e only)"],
-      ["agent/review", "Review: APPROVE WITH SUGGESTIONS (OpenAI Codex, GPT-6)"],
       ["agent/review", "Review: APPROVE WITH SUGGESTIONS (combined medium-risk check)"],
       [
         "agent/review",
         "Review: APPROVE WITH SUGGESTIONS (combined medium-tier agent, Claude Opus 5.5)",
       ],
-      ["agent/review", "Review: APPROVE WITH SUGGESTIONS — OpenAI Codex, GPT-6"],
     ];
 
     it("accepts every real agent verdict from recent PRs", () => {
@@ -676,6 +674,14 @@ describe("carry-forward", () => {
         ["agent/review", "Review: APPROVE pending a re-check"],
         ["agent/qa", "QA: PASS "],
         ["agent/qa", "QA: PASS (combined medium-tier agent) but e2e failing"],
+        ["agent/qa", "QA: PASS (combined e2e failing)"],
+        ["agent/qa", "QA: PASS (combined medium-tier agent, Claude says e2e failing)"],
+        // Codex's wordings, dropped 2026-11-08, and the near miss that got through them.
+        ["agent/qa", "QA: PASS — OpenAI Codex, GPT-6"],
+        ["agent/qa", "QA: PASS — OpenAI Codex, GPT-6 but e2e failing"],
+        ["agent/review", "Review: APPROVE WITH SUGGESTIONS (OpenAI Codex, GPT-6)"],
+        ["agent/review", "Review: APPROVE WITH SUGGESTIONS — OpenAI Codex, GPT-6"],
+        ["agent/review", "Review: APPROVE (OpenAI Codex, GPT-6 but tests failing)"],
         ["agent/qa", "QA: PASS (lead says fine)"],
         ["agent/qa", "QA: PASS — Tuan"],
         ["agent/qa", "Not QA: PASS"],

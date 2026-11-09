@@ -37,7 +37,7 @@ In the Ubuntu terminal:
 
 ```bash
 sudo apt update
-sudo apt install -y git curl ca-certificates build-essential tmux unzip jq
+sudo apt install -y git curl ca-certificates build-essential tmux unzip
 # The credential guard in .claude/settings.json and .codex/config.toml points gh at /var/empty.
 # macOS has that folder; Ubuntu doesn't, so create it read-only and empty.
 sudo mkdir -p /var/empty && sudo chmod 555 /var/empty
