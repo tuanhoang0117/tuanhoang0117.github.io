@@ -22,20 +22,25 @@ import { parseArgs } from "node:util";
 export const REPO = "tuanhoang0117/tuanhoang0117.github.io";
 const API = `repos/${REPO}`;
 const CONTEXTS = ["agent/qa", "agent/review"] as const;
-type Context = (typeof CONTEXTS)[number];
+export type Context = (typeof CONTEXTS)[number];
 const LABEL: Record<Context, string> = { "agent/qa": "QA report", "agent/review": "review" };
 // GitHub's compare API lists at most 300 files; past that we can't prove every file was checked.
 const COMPARE_FILE_LIMIT = 300;
 const BODY_DELIMITER = "CARRY_FORWARD_BODY";
 // Only verdicts the agents posted themselves can be carried: the bot account, with the exact
-// verdict prefix the agent definitions publish (.claude/agents/qa.md, reviewer.md). A combined
-// agent appends a note, as in "QA: PASS (combined medium-tier agent, ...)". Anything else, such as
-// Tuan's "Override by Tuan: ..." or "No agent run: ...", or a status that was itself carried, is
-// refused: an allow-list fails closed on wording nobody listed.
+// verdict the agent definitions publish (.claude/agents/qa.md, reviewer.md), alone or followed by
+// one of the notes agents have actually appended: a combined agent's "(combined medium-risk check)"
+// or "(combined medium-tier agent, Claude <model>)", or a re-check's "(<sha> only)". Codex's
+// "(OpenAI Codex, <model>)" and " — OpenAI Codex, <model>" are refused (Tuan's decision,
+// 2026-11-08): a free-text model name let "— OpenAI Codex, GPT-6 but e2e failing" through. Anything
+// else, such as "QA: PASS but e2e failing", Tuan's "Override by Tuan: ..." or "No agent run: ...",
+// or a status that was itself carried, is refused: an allow-list fails closed on wording nobody
+// listed. A new agent wording refuses until it is added here.
 export const BOT = "tuanhoang-bot";
+const NOTE = String.raw`(?: \((?:combined medium-risk check|combined medium-tier agent, Claude [A-Z][a-z]+ \d+(?:\.\d+)?|[0-9a-f]{7,40} only)\))?`;
 const VERDICT: Record<Context, RegExp> = {
-  "agent/qa": /^QA: PASS(\s|$)/,
-  "agent/review": /^Review: APPROVE( WITH SUGGESTIONS)?(\s|$)/,
+  "agent/qa": new RegExp(String.raw`^QA: PASS${NOTE}$`),
+  "agent/review": new RegExp(String.raw`^Review: APPROVE(?: WITH SUGGESTIONS)?${NOTE}$`),
 };
 
 /** Runs `gh <args>` (as the bot) and returns stdout. Throws on a non-zero exit. */
@@ -170,7 +175,7 @@ function agentStatuses(gh: GhRunner, sha: string): Map<string, Status> {
 }
 
 /** A PASS/APPROVE the agent itself posted on this commit: not carried, overridden or Tuan's. */
-function isOwnVerdict(ctx: Context, s: Status | undefined): boolean {
+export function isOwnVerdict(ctx: Context, s: Status | undefined): boolean {
   if (!s || s.state !== "success" || s.creator?.login !== BOT) return false;
   const description = s.description ?? "";
   return VERDICT[ctx].test(description) && !/carried|override/i.test(description);
@@ -473,7 +478,12 @@ export function ownerCommands(plan: Plan, ownerOk: string): string {
       (ctx) =>
         `gh api -X POST ${API}/statuses/${plan.head} -f state=success -f context=${ctx} -f description=${shq(desc[ctx])} -f target_url="$url" --silent`,
     ),
-    `gh api ${API}/commits/${plan.head}/status --jq '.statuses[] | select(.context | startswith("agent/")) | [.context, .state, .description] | @tsv'`,
+    // Like --post, read the statuses back: the newest per context must be the one just posted.
+    ...CONTEXTS.flatMap((ctx) => [
+      `got=$(gh api '${API}/commits/${plan.head}/status?per_page=100' --jq '.statuses[] | select(.context == "${ctx}") | .state + " " + .target_url + " " + .description')`,
+      `[ "$got" = "success $url "${shq(desc[ctx])} ] || { echo "${ctx} did not stick on ${plan.head} (now: $got); check GitHub" >&2; exit 1; }`,
+    ]),
+    `echo "verified: both statuses are on ${plan.head}"`,
     ")",
   ].join("\n");
 }
