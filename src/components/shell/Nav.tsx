@@ -29,15 +29,12 @@ export const REDUCED_TRANSPARENCY_QUERY = "(prefers-reduced-transparency: reduce
 
 /**
  * The panel's frosted glass, the one exception to "no blur" (docs/design-system.md). Applied only
- * where backdrop-filter works; anywhere else the panel stays opaque paper. From sm up the tint is
- * thin so the page shows through, and the heavy blur keeps links readable by smoothing the page
- * into soft color. Phones keep a thick tint: headless Chromium drops backdrop blur above 1x pixel
- * density, so CI can only prove phone contrast from the tint alone. e2e/menu.spec.ts measures
- * every link against the real pixels on each page.
+ * where backdrop-filter works; anywhere else the panel stays opaque paper. The heavy blur turns
+ * the page into soft color, and the 70% tint alone keeps every link above 4.5:1 even over solid
+ * black, so no image added later can make a link unreadable.
  */
 export const MENU_GLASS = [
   "supports-backdrop-filter:bg-card/70",
-  "supports-backdrop-filter:sm:bg-card/40",
   "supports-backdrop-filter:backdrop-blur-3xl",
   "supports-backdrop-filter:backdrop-saturate-150",
 ].join(" ");
